@@ -53,6 +53,27 @@ import { isWindowsContainerEnvironment } from "./windows-container.js";
 
 export { corsHeaders, isTrustedOrigin } from "./server-http.js";
 
+const DAEMON_SHUTDOWN_ACTIVE_SESSION_GRACE_MS = 5000;
+
+async function waitForActiveTasks(
+  activeTasks: Set<Promise<void>>,
+  timeoutMs: number,
+): Promise<void> {
+  if (activeTasks.size === 0) return;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    await Promise.race([
+      Promise.allSettled([...activeTasks]).then(() => undefined),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export function resolveDaemonListenHost(env: Record<string, string | undefined>): string {
   return process.platform === "win32" && isWindowsContainerEnvironment(env)
     ? "0.0.0.0"
@@ -137,10 +158,11 @@ export async function runDaemonServer({
 
   const sessions = new Map<string, Session>();
   const refreshSessions = new Map<string, Session>();
+  const activeTasks = new Set<Promise<void>>();
   let activeRefreshSessionId: string | null = null;
 
   const server = http.createServer((req, res) => {
-    void (async () => {
+    const requestTask = (async () => {
       const cors = readCorsHeaders(req);
 
       if (req.method === "OPTIONS") {
@@ -345,7 +367,7 @@ export async function runDaemonServer({
 
         json(res, 200, { ok: true, id: session.id }, cors);
 
-        void executeSummarizeSession({
+        const summaryTask = executeSummarizeSession({
           session,
           request,
           env,
@@ -362,6 +384,8 @@ export async function runDaemonServer({
           sessions,
           refreshSessions,
         });
+        activeTasks.add(summaryTask);
+        void summaryTask.finally(() => activeTasks.delete(summaryTask));
         return;
       }
 
@@ -398,6 +422,8 @@ export async function runDaemonServer({
         // ignore
       }
     });
+    activeTasks.add(requestTask);
+    void requestTask.finally(() => activeTasks.delete(requestTask));
   });
 
   try {
@@ -420,6 +446,8 @@ export async function runDaemonServer({
         if (resolved) return;
         resolved = true;
         server.close(() => resolve());
+        server.closeIdleConnections?.();
+        server.closeAllConnections?.();
       };
       process.once("SIGTERM", onStop);
       process.once("SIGINT", onStop);
@@ -432,6 +460,7 @@ export async function runDaemonServer({
       }
     });
   } finally {
+    await waitForActiveTasks(activeTasks, DAEMON_SHUTDOWN_ACTIVE_SESSION_GRACE_MS);
     cacheState.store?.close();
   }
 }
