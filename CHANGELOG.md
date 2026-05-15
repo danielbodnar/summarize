@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.1 - 2026-05-15
+
+### Fixes
+
+- Packaging: publish the CLI with a resolved core package dependency so registry installs work outside the workspace.
+
 ## 0.15.0 - 2026-05-15
 
 ### Features
