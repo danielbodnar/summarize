@@ -1,6 +1,8 @@
 import type { TranscriptSegment } from "../link-preview/types.js";
 
 const TIMESTAMP_SPLIT_PATTERN = /:/;
+const INTEGER_TIMESTAMP_PART_PATTERN = /^\d+$/;
+const SECONDS_TIMESTAMP_PART_PATTERN = /^\d+(?:[,.]\d+)?$/;
 
 export function formatTimestampMs(ms: number): string {
   const safe = Math.max(0, Math.round(ms));
@@ -24,18 +26,20 @@ export function parseTimestampStringToMs(value: string): number | null {
 
   const parts = trimmed.split(TIMESTAMP_SPLIT_PATTERN).map((part) => part.trim());
   if (parts.length < 2 || parts.length > 3) return null;
-  if (parts.some((part) => !/^\d+(?:[,.]\d+)?$/.test(part))) return null;
   const secondsPart = parts.pop();
   if (secondsPart == null) return null;
+  if (!SECONDS_TIMESTAMP_PART_PATTERN.test(secondsPart)) return null;
   const seconds = Number(secondsPart.replace(",", "."));
   if (!Number.isFinite(seconds) || seconds < 0 || seconds >= 60) return null;
 
   const minutesPart = parts.pop();
   if (minutesPart == null) return null;
+  if (!INTEGER_TIMESTAMP_PART_PATTERN.test(minutesPart)) return null;
   const minutes = Number(minutesPart);
   if (!Number.isFinite(minutes) || minutes < 0) return null;
 
   const hoursPart = parts.pop();
+  if (hoursPart != null && !INTEGER_TIMESTAMP_PART_PATTERN.test(hoursPart)) return null;
   const hours = hoursPart != null ? Number(hoursPart) : 0;
   if (!Number.isFinite(hours) || hours < 0) return null;
   if (hoursPart != null && minutes >= 60) return null;
