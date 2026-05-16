@@ -26,6 +26,8 @@ describe("buildLinkSummaryPrompt (slides)", () => {
     expect(prompt).toContain('Every slide must include a headline line that starts with "## ".');
     expect(prompt).toContain("If there is no obvious title, create a short 2-6 word headline");
     expect(prompt).toContain('Never output "Title:" or "Slide 1/10".');
+    expect(prompt).toContain('add exactly "## Interlude" with no body');
+    expect(prompt).not.toContain("leave that slide marker with no text");
     expect(prompt).toContain("Do not create a dedicated Slides section or list");
     expect(prompt).not.toContain("Include at least 3 headings");
   });

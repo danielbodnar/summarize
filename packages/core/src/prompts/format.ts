@@ -45,8 +45,10 @@ export function buildTaggedPrompt({
   context: string;
   content: string;
 }): string {
+  const escapeTaggedValue = (value: string): string =>
+    value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const safeInstructions = instructions.trim();
-  const safeContext = context.trim();
-  const safeContent = typeof content === "string" ? content : "";
+  const safeContext = escapeTaggedValue(context.trim());
+  const safeContent = escapeTaggedValue(typeof content === "string" ? content : "");
   return `<instructions>\n${safeInstructions}\n</instructions>\n\n<context>\n${safeContext}\n</context>\n\n<content>\n${safeContent}\n</content>\n`;
 }

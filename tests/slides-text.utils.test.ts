@@ -61,6 +61,18 @@ describe("slides text helpers", () => {
     expect(result.has(0)).toBe(false);
   });
 
+  it("keeps empty slide markers from swallowing later markdown sections", () => {
+    const markdown = ["Intro", "", "### Slides", "[slide:1]", "", "### Sources", "Other"].join(
+      "\n",
+    );
+    const result = parseSlideSummariesFromMarkdown(markdown);
+    expect(result.get(1)).toBe("");
+    expect(result.size).toBe(1);
+
+    const compact = ["### Slides", "[slide:1]", "### Sources", "Other"].join("\n");
+    expect(parseSlideSummariesFromMarkdown(compact).get(1)).toBe("");
+  });
+
   it("extracts slide markers from inline tags", () => {
     const markers = extractSlideMarkers("[slide:1]\nText\n[slide:2] More");
     expect(markers).toEqual([1, 2]);
@@ -297,6 +309,148 @@ describe("slides text helpers", () => {
     });
     expect(coerced).toContain("[slide:1]\nFirst body paragraph.");
     expect(coerced).toContain("[slide:2]\nSecond body paragraph.");
+  });
+
+  it("preserves interlude headings for sponsor-only slide blocks", () => {
+    const slides = [
+      { index: 1, timestamp: 10 },
+      { index: 2, timestamp: 20 },
+    ];
+    const coerced = coerceSummaryWithSlides({
+      markdown: ["[slide:1]", "## Interlude", "", "[slide:2]", "## Interlude"].join("\n"),
+      slides,
+      transcriptTimedText: null,
+      lengthArg: { kind: "preset", preset: "short" },
+    });
+
+    expect(coerced).toContain("[slide:1]\n## Interlude");
+    expect(coerced).toContain("[slide:2]\n## Interlude");
+  });
+
+  it("preserves body text after a final markdown slide heading", () => {
+    const slides = [{ index: 1, timestamp: 10 }];
+    const markdown = ["[slide:1]", "## Key Topic", "", "This is the body paragraph."].join("\n");
+    const coerced = coerceSummaryWithSlides({
+      markdown,
+      slides,
+      transcriptTimedText: null,
+      lengthArg: { kind: "preset", preset: "short" },
+    });
+
+    expect(coerced).toContain("[slide:1]\n## Key Topic");
+    expect(coerced).toContain("This is the body paragraph.");
+  });
+
+  it("does not redistribute stray text into all-interlude slides", () => {
+    const slides = [
+      { index: 1, timestamp: 10 },
+      { index: 2, timestamp: 20 },
+    ];
+    const markdown = [
+      "Intro paragraph.",
+      "",
+      "[slide:1]",
+      "## Interlude",
+      "",
+      "[slide:2]",
+      "## Interlude",
+      "",
+      "Stray sponsor takeaway.",
+    ].join("\n");
+    const coerced = coerceSummaryWithSlides({
+      markdown,
+      slides,
+      transcriptTimedText: null,
+      lengthArg: { kind: "preset", preset: "short" },
+    });
+
+    expect(coerced).toContain("[slide:1]\n## Interlude");
+    expect(coerced).toContain("[slide:2]\n## Interlude");
+    expect(coerced).not.toContain("Stray sponsor takeaway.");
+  });
+
+  it("does not treat missing slide indexes as all-interlude", () => {
+    const slides = [
+      { index: 1, timestamp: 10 },
+      { index: 2, timestamp: 20 },
+    ];
+    const markdown = [
+      "Intro paragraph.",
+      "",
+      "[slide:1]",
+      "## Interlude",
+      "",
+      "[slide:3]",
+      "## Interlude",
+    ].join("\n");
+    const coerced = coerceSummaryWithSlides({
+      markdown,
+      slides,
+      transcriptTimedText: "[00:20] Missing slide body.",
+      lengthArg: { kind: "preset", preset: "short" },
+    });
+
+    expect(coerced).toContain("[slide:1]\n## Interlude");
+    expect(coerced).toContain("[slide:2]");
+    expect(coerced).toContain("Missing slide body.");
+  });
+
+  it("does not promote stray all-interlude text when there is no intro", () => {
+    const slides = [
+      { index: 1, timestamp: 10 },
+      { index: 2, timestamp: 20 },
+    ];
+    const markdown = [
+      "[slide:1]",
+      "## Interlude",
+      "",
+      "[slide:2]",
+      "## Interlude",
+      "",
+      "Stray sponsor takeaway.",
+    ].join("\n");
+    const coerced = coerceSummaryWithSlides({
+      markdown,
+      slides,
+      transcriptTimedText: null,
+      lengthArg: { kind: "preset", preset: "short" },
+    });
+
+    expect(coerced).toContain("[slide:1]\n## Interlude");
+    expect(coerced).toContain("[slide:2]\n## Interlude");
+    expect(coerced).not.toContain("Stray sponsor takeaway.");
+    expect(coerced).not.toMatch(/^Stray/m);
+  });
+
+  it("keeps body text when one title-only slide is an interlude", () => {
+    const slides = [
+      { index: 1, timestamp: 10 },
+      { index: 2, timestamp: 20 },
+    ];
+    const markdown = [
+      "Intro paragraph.",
+      "",
+      "[slide:1]",
+      "## Interlude",
+      "",
+      "[slide:2]",
+      "Security Nightmare",
+      "",
+      "First body paragraph.",
+      "",
+      "Second body paragraph.",
+    ].join("\n");
+    const coerced = coerceSummaryWithSlides({
+      markdown,
+      slides,
+      transcriptTimedText: null,
+      lengthArg: { kind: "preset", preset: "short" },
+    });
+
+    expect(coerced).toContain("[slide:1]\n## Interlude");
+    expect(coerced).toContain("[slide:2]");
+    expect(coerced).toContain("First body paragraph.");
+    expect(coerced).toContain("Second body paragraph.");
   });
 
   it("parses transcript timed text and sorts by timestamp", () => {

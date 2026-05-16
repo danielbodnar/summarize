@@ -38,6 +38,16 @@ const isTitleOnlySlideText = (value: string): boolean => {
   return true;
 };
 
+const isInterludeSlideText = (value: string): boolean => {
+  const normalized = value
+    .trim()
+    .split("\n")
+    .map((line) => line.trim().replace(/^#{1,6}\s+/, ""))
+    .filter(Boolean)
+    .join(" ");
+  return normalized.toLowerCase() === "interlude";
+};
+
 const stripSlideTitleList = (markdown: string): string => {
   if (!markdown.trim()) return markdown;
   const lines = markdown.split("\n");
@@ -206,6 +216,7 @@ export function parseSlideSummariesFromMarkdown(markdown: string): Map<number, s
   const lines = slice.split("\n");
   let currentIndex: number | null = null;
   let buffer: string[] = [];
+  let sawBlankAfterMarker = false;
   let sawBlankAfterTitle = false;
   const hasFutureMarker = (start: number) =>
     lines.slice(start).some((line) => {
@@ -221,6 +232,7 @@ export function parseSlideSummariesFromMarkdown(markdown: string): Map<number, s
     result.set(currentIndex, text);
     currentIndex = null;
     buffer = [];
+    sawBlankAfterMarker = false;
     sawBlankAfterTitle = false;
   };
 
@@ -228,7 +240,14 @@ export function parseSlideSummariesFromMarkdown(markdown: string): Map<number, s
     const line = lines[i] ?? "";
     const trimmed = line.trim();
     const heading = trimmed.match(/^#{1,3}\s+\S/);
-    if (heading && !trimmed.toLowerCase().startsWith("### slides")) {
+    if (
+      heading &&
+      (currentIndex == null ||
+        buffer.length > 0 ||
+        sawBlankAfterMarker ||
+        /^#{3}\s+\S/.test(trimmed)) &&
+      !trimmed.toLowerCase().startsWith("### slides")
+    ) {
       flush();
       break;
     }
@@ -238,6 +257,7 @@ export function parseSlideSummariesFromMarkdown(markdown: string): Map<number, s
       const index = Number.parseInt(match[1] ?? "", 10);
       if (!Number.isFinite(index) || index <= 0) continue;
       currentIndex = index;
+      sawBlankAfterMarker = false;
       sawBlankAfterTitle = false;
       const rest = (match[2] ?? "").trim();
       if (rest) buffer.push(rest);
@@ -249,11 +269,15 @@ export function parseSlideSummariesFromMarkdown(markdown: string): Map<number, s
       const index = Number.parseInt(label[1] ?? "", 10);
       if (!Number.isFinite(index) || index <= 0) continue;
       currentIndex = index;
+      sawBlankAfterMarker = false;
       sawBlankAfterTitle = false;
       continue;
     }
     if (currentIndex == null) continue;
     if (!trimmed) {
+      if (buffer.length === 0) {
+        sawBlankAfterMarker = true;
+      }
       if (buffer.length === 1 && isTitleOnlySlideText(buffer[0] ?? "")) {
         sawBlankAfterTitle = true;
       }
@@ -263,12 +287,14 @@ export function parseSlideSummariesFromMarkdown(markdown: string): Map<number, s
       sawBlankAfterTitle &&
       buffer.length === 1 &&
       isTitleOnlySlideText(buffer[0] ?? "") &&
+      (!/^#{1,6}\s+\S/.test(buffer[0]?.trim() ?? "") || isInterludeSlideText(buffer[0] ?? "")) &&
       !isTitleOnlySlideText(trimmed) &&
       !hasFutureMarker(i)
     ) {
       flush();
       break;
     }
+    sawBlankAfterMarker = false;
     sawBlankAfterTitle = false;
     buffer.push(trimmed);
   }
@@ -408,6 +434,11 @@ export function coerceSummaryWithSlides({
   const { summary, slidesSection } = splitSummaryFromSlides(markdown);
   const intro = pickIntroParagraph(summary);
   const slideSummaries = slidesSection ? parseSlideSummariesFromMarkdown(markdown) : new Map();
+  const interludeSlideIndexes = new Set(
+    Array.from(slideSummaries.entries())
+      .filter(([, text]) => isInterludeSlideText(text))
+      .map(([index]) => index),
+  );
   const titleOnlySlideSummaries =
     slideSummaries.size > 0 &&
     Array.from(slideSummaries.values()).every((text) => isTitleOnlySlideText(text));
@@ -431,28 +462,53 @@ export function coerceSummaryWithSlides({
 
   const paragraphs = splitMarkdownParagraphs(distributionMarkdown);
   if (paragraphs.length === 0) return markdown;
+  const parts: string[] = [];
+  const allOrderedSlidesAreInterludes =
+    ordered.length > 0 && ordered.every((slide) => interludeSlideIndexes.has(slide.index));
+  if (allOrderedSlidesAreInterludes) {
+    if (intro) parts.push(intro.trim());
+    for (const slide of ordered) {
+      parts.push(`[slide:${slide.index}]\n## Interlude`);
+    }
+    return parts.join("\n\n");
+  }
   const introParagraph = intro || paragraphs[0] || "";
   const introIndex = paragraphs.indexOf(introParagraph);
   const remaining =
     introIndex >= 0 ? paragraphs.filter((_, index) => index !== introIndex) : paragraphs.slice(1);
-  const parts: string[] = [];
   if (introParagraph) parts.push(introParagraph.trim());
   if (remaining.length === 0) {
     for (const slide of ordered) {
-      parts.push(`[slide:${slide.index}]`);
+      if (interludeSlideIndexes.has(slide.index)) {
+        parts.push(`[slide:${slide.index}]\n## Interlude`);
+        continue;
+      }
+      const fallback = fallbackSummaries.get(slide.index) ?? "";
+      const withTitle = fallback
+        ? ensureSlideTitleLine({ text: fallback, slide, total: ordered.length })
+        : "";
+      parts.push(withTitle ? `[slide:${slide.index}]\n${withTitle}` : `[slide:${slide.index}]`);
     }
     return parts.join("\n\n");
   }
-  const total = ordered.length;
-  for (let i = 0; i < total; i += 1) {
-    const start = Math.round((i * remaining.length) / total);
-    const end = Math.round(((i + 1) * remaining.length) / total);
+  const distributableSlides = ordered.filter((slide) => !interludeSlideIndexes.has(slide.index));
+  const distributionSlides = distributableSlides.length > 0 ? distributableSlides : ordered;
+  const total = distributionSlides.length;
+  const slideTotal = ordered.length;
+  let distributionIndex = 0;
+  for (const slide of ordered) {
+    const slideIndex = slide.index;
+    if (interludeSlideIndexes.has(slideIndex) && distributableSlides.length > 0) {
+      parts.push(`[slide:${slideIndex}]\n## Interlude`);
+      continue;
+    }
+    const start = Math.round((distributionIndex * remaining.length) / total);
+    const end = Math.round(((distributionIndex + 1) * remaining.length) / total);
+    distributionIndex += 1;
     const segment = remaining.slice(start, end).join("\n\n").trim();
-    const slideIndex = ordered[i]?.index ?? i + 1;
     const fallback = fallbackSummaries.get(slideIndex) ?? "";
     const text = segment || fallback;
-    const slide = ordered[i] ?? { index: slideIndex, timestamp: Number.NaN };
-    const withTitle = text ? ensureSlideTitleLine({ text, slide, total }) : "";
+    const withTitle = text ? ensureSlideTitleLine({ text, slide, total: slideTotal }) : "";
     parts.push(withTitle ? `[slide:${slideIndex}]\n${withTitle}` : `[slide:${slideIndex}]`);
   }
   return parts.join("\n\n");
