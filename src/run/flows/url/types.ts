@@ -67,6 +67,7 @@ export type UrlFlowFlags = {
   slides: SlideSettings | null;
   slidesDebug: boolean;
   slidesOutput?: boolean;
+  throwOnAssetLikeHtmlError?: boolean;
 };
 
 export type UrlFlowModel = {

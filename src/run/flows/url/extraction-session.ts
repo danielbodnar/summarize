@@ -110,6 +110,7 @@ export function createUrlExtractionSession({
               format: options.format,
               markdownMode: options.markdownMode ?? null,
               transcriptTimestamps: options.transcriptTimestamps ?? false,
+              throwOnAssetLikeHtmlError: options.throwOnAssetLikeHtmlError ?? false,
               ...(typeof options.maxCharacters === "number"
                 ? { maxCharacters: options.maxCharacters }
                 : {}),

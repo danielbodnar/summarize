@@ -13,6 +13,7 @@
 - Chrome extension: keep stale model discovery responses from reverting newer token results or user-selected models.
 - Chrome extension options: keep stale daemon status checks from replacing the missing-token warning after the token field is cleared.
 - Chrome extension options: show save failures instead of leaving the form stuck on Saving.
+- CLI performance: skip remote asset probes for normal web URLs so extraction reaches first stdout sooner while preserving unknown-asset fallback after URL extraction failures.
 - YouTube transcripts: try same-language caption fallbacks when the preferred caption URL is blocked or dead.
 - Chrome extension: match CLI slide defaults for YouTube slide summaries and replace transcript fallback card text with LLM-written slide summaries.
 - Chrome extension options: defer loading automation skills until the Skills tab opens so settings startup avoids the large skills bundle.

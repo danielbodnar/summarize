@@ -421,6 +421,7 @@ export async function createRunnerPlan(options: {
       slides: slidesSettings,
       slidesDebug,
       slidesOutput: true,
+      throwOnAssetLikeHtmlError: true,
     },
     model: {
       requestedModel,
