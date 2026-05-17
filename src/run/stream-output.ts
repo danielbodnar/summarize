@@ -100,8 +100,12 @@ export function createStreamOutputGate({
     cleared = true;
   };
 
+  const clearBeforeWrite = () => {
+    if (restoreDuringStream) clearProgressForStdout();
+  };
+
   const flush = (text: string) => {
-    clearProgressForStdout();
+    clearBeforeWrite();
     stdout.write(text);
     plainFlushedText += text;
     if (restoreDuringStream) restoreProgressAfterStdout?.();
@@ -167,7 +171,7 @@ export function createStreamOutputGate({
       let reprint = plainFlushedText && !plainFlushedText.endsWith("\n") ? "\n" : "";
       reprint += corrected.replace(/^\n+/, "");
       if (!reprint.endsWith("\n")) reprint += "\n";
-      clearProgressForStdout();
+      clearBeforeWrite();
       stdout.write(reprint);
       restoreProgressAfterStdout?.();
       plainFlushedLen = finalText.length;
@@ -178,7 +182,7 @@ export function createStreamOutputGate({
 
     const remaining = plainFlushedLen < finalText.length ? finalText.slice(plainFlushedLen) : "";
     if (remaining) {
-      clearProgressForStdout();
+      clearBeforeWrite();
       stdout.write(remaining);
       plainFlushedText += remaining;
       restoreProgressAfterStdout?.();
@@ -187,7 +191,7 @@ export function createStreamOutputGate({
       ? remaining.endsWith("\n")
       : plainFlushedLen > 0 && finalText[plainFlushedLen - 1] === "\n";
     if (!endedWithNewline) {
-      clearProgressForStdout();
+      clearBeforeWrite();
       stdout.write("\n");
       plainFlushedText += "\n";
       restoreProgressAfterStdout?.();

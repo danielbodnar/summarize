@@ -1,5 +1,6 @@
 import { Writable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
+import { createProgressGate } from "../src/run/progress.js";
 import { createStreamOutputGate } from "../src/run/stream-output.js";
 
 function collectChunks() {
@@ -32,6 +33,30 @@ describe("createStreamOutputGate", () => {
     gate.finalize("Hello world!");
 
     expect(stdout.chunks).toEqual(["Hello world.", "\r\u001b[2KHello world!", "\n"]);
+    expect(restore).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves a paused progress restore while streaming delta chunks", () => {
+    const stdout = collectChunks();
+    const restore = vi.fn();
+    const progress = createProgressGate();
+    progress.setClearProgressBeforeStdout(() => restore);
+    const gate = createStreamOutputGate({
+      stdout: stdout.stream,
+      clearProgressForStdout: progress.clearProgressForStdout,
+      restoreProgressAfterStdout: null,
+      outputMode: "delta",
+      richTty: false,
+      rewriteOnReplacement: false,
+      restoreDuringStream: false,
+    });
+
+    gate.handleChunk("Hello", "");
+    gate.handleChunk("Hello world", "Hello");
+    gate.finalize("Hello world");
+    progress.restoreProgressAfterStdout();
+
+    expect(stdout.chunks).toEqual(["Hello", " world", "\n"]);
     expect(restore).toHaveBeenCalledTimes(1);
   });
 
