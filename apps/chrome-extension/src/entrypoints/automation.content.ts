@@ -341,11 +341,17 @@ function hideReplOverlay() {
 function handleNativeInputBridge() {
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
-    const data = event.data as { source?: string; requestId?: string; payload?: unknown };
+    const data = event.data as {
+      source?: string;
+      requestId?: string;
+      capability?: string;
+      payload?: unknown;
+    };
     if (data?.source !== "summarize-native-input" || !data.requestId) return;
+    if (typeof data.capability !== "string" || data.capability.length < 32) return;
     const payload = data.payload as { action?: string };
     chrome.runtime.sendMessage(
-      { type: "automation:native-input", payload },
+      { type: "automation:native-input", capability: data.capability, payload },
       (response: { ok: boolean; error?: string } | undefined) => {
         window.postMessage(
           {

@@ -49,6 +49,7 @@ import {
   toExtractOnlySlidesPayload,
 } from "./server-summarize-execution.js";
 import { parseSummarizeRequest } from "./server-summarize-request.js";
+import { assertDaemonUrlFetchAllowed, createDaemonUrlFetchGuard } from "./url-fetch-guard.js";
 import { isWindowsContainerEnvironment } from "./windows-container.js";
 
 export { corsHeaders, isTrustedOrigin } from "./server-http.js";
@@ -290,6 +291,18 @@ export async function runDaemonServer({
         if (!request) {
           return;
         }
+        const urlFetchNeeded = request.extractOnly || request.mode === "url" || !request.hasText;
+        let summarizeUrlFetchImpl: typeof fetch | null = null;
+        if (urlFetchNeeded) {
+          try {
+            await assertDaemonUrlFetchAllowed(request.pageUrl);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            json(res, 400, { ok: false, error: message }, cors);
+            return;
+          }
+          summarizeUrlFetchImpl = createDaemonUrlFetchGuard(fetchImpl);
+        }
         const {
           pageUrl,
           title,
@@ -329,6 +342,7 @@ export async function runDaemonServer({
                   request,
                   env,
                   fetchImpl,
+                  urlFetchImpl: summarizeUrlFetchImpl,
                   cacheState,
                   mediaCache,
                 });
@@ -422,6 +436,7 @@ export async function runDaemonServer({
             request,
             env,
             fetchImpl,
+            urlFetchImpl: summarizeUrlFetchImpl,
             cacheState,
             mediaCache,
             port,

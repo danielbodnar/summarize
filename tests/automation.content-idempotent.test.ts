@@ -53,6 +53,7 @@ describe("automation content script install", () => {
       data: {
         source: "summarize-native-input",
         requestId: "req-1",
+        capability: "c".repeat(32),
         payload: { action: "click" },
       },
     });

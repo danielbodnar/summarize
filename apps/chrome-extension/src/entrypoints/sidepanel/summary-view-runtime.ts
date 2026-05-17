@@ -184,7 +184,9 @@ export function createSummaryViewRuntime(opts: SummaryViewRuntimeOpts) {
         })),
       };
       opts.setSlidesContextPending(false);
-      opts.setSlidesContextUrl(payload.url);
+      opts.setSlidesContextUrl(
+        opts.slidesTextController.getTranscriptAvailable() ? payload.url : null,
+      );
       opts.updateSlidesTextState();
       if (!opts.slidesTextController.getTranscriptAvailable()) {
         void opts.requestSlidesContext();

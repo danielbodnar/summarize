@@ -72,6 +72,7 @@ function applyAutoCliFallbackOverrides(
 export type DaemonUrlFlowContextArgs = {
   env: Record<string, string | undefined>;
   fetchImpl: typeof fetch;
+  urlFetchImpl?: typeof fetch | null;
   cache: CacheState;
   mediaCache?: MediaCache | null;
   modelOverride: string | null;
@@ -114,6 +115,7 @@ export function createDaemonUrlFlowContext(args: DaemonUrlFlowContextArgs): UrlF
   const {
     env,
     fetchImpl,
+    urlFetchImpl,
     cache,
     mediaCache = null,
     modelOverride,
@@ -376,6 +378,7 @@ export function createDaemonUrlFlowContext(args: DaemonUrlFlowContextArgs): UrlF
       stderr,
       execFileImpl: execFileTracked as unknown as ExecFileFn,
       fetch: metrics.trackedFetch,
+      ...(urlFetchImpl ? { urlFetch: urlFetchImpl } : {}),
     },
     flags: {
       timeoutMs,

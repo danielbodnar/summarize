@@ -53,6 +53,9 @@ importers:
       tslog:
         specifier: ^4.10.2
         version: 4.10.2
+      undici:
+        specifier: 7.25.0
+        version: 7.25.0
     devDependencies:
       '@fal-ai/client':
         specifier: ^1.10.1

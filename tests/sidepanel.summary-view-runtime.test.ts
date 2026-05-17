@@ -112,4 +112,77 @@ describe("summary view runtime", () => {
       hasSlides: false,
     });
   });
+
+  it("requests transcript context when cached slides lack timed transcript text", () => {
+    const panelState = createPanelState();
+    const setSlidesContextUrl = vi.fn();
+    const requestSlidesContext = vi.fn();
+    const runtime = createSummaryViewRuntime({
+      panelState,
+      renderEl: document.createElement("div"),
+      renderSlidesHostEl: document.createElement("div"),
+      renderMarkdownHostEl: document.createElement("div"),
+      getSlidesRenderer: () => ({ clear: vi.fn() }),
+      metricsController: { clearForMode: vi.fn() },
+      headerController: { setBaseTitle: vi.fn(), setBaseSubtitle: vi.fn() },
+      slidesTextController: {
+        reset: vi.fn(),
+        getTranscriptTimedText: vi.fn(() => null),
+        getTranscriptAvailable: vi.fn(() => false),
+      },
+      getSlidesHydrator: () => ({ syncFromCache: vi.fn() }),
+      stopSlidesStream: vi.fn(),
+      refreshSummarizeControl: vi.fn(),
+      resetChatState: vi.fn(),
+      setSlidesTranscriptTimedText: vi.fn(),
+      getSlidesParallelValue: vi.fn(() => true),
+      getCurrentRunTabId: vi.fn(() => null),
+      getActiveTabId: vi.fn(() => 1),
+      getActiveTabUrl: vi.fn(() => "https://example.com/watch?v=abc123"),
+      setCurrentRunTabId: vi.fn(),
+      setSlidesContextPending: vi.fn(),
+      setSlidesContextUrl,
+      setSlidesSeededSourceId: vi.fn(),
+      setSlidesAppliedRunId: vi.fn(),
+      setSlidesExpanded: vi.fn(),
+      resolveActiveSlidesRunId: vi.fn(() => "slides-1"),
+      getSlidesSummaryState: vi.fn(() => ({
+        runId: null,
+        markdown: "",
+        complete: false,
+        model: null,
+      })),
+      setSlidesSummaryState: vi.fn(),
+      clearSlidesSummaryPending: vi.fn(),
+      clearSlidesSummaryError: vi.fn(),
+      updateSlidesTextState: vi.fn(),
+      requestSlidesContext,
+      updateSlideSummaryFromMarkdown: vi.fn(),
+      renderMarkdown: vi.fn(),
+      renderMarkdownDisplay: vi.fn(),
+      queueSlidesRender: vi.fn(),
+      setPhase: vi.fn(),
+    });
+
+    runtime.applyPanelCache(
+      createCachePayload({
+        slides: {
+          sourceUrl: "https://example.com/watch?v=abc123",
+          sourceId: "youtube-abc123",
+          sourceKind: "youtube",
+          ocrAvailable: true,
+          slides: [
+            {
+              index: 1,
+              timestamp: 0,
+              imageUrl: "http://127.0.0.1:8787/v1/slides/youtube-abc123/1",
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(setSlidesContextUrl).toHaveBeenCalledWith(null);
+    expect(requestSlidesContext).toHaveBeenCalledTimes(1);
+  });
 });

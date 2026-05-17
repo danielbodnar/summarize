@@ -4,6 +4,11 @@
 
 ### Fixes
 
+- Daemon: block daemon URL-mode extraction from fetching loopback, private-network, link-local, and redirect targets that resolve to local networks, and disable unguarded `yt-dlp` media fetches in guarded daemon URL runs.
+- Chrome extension automation: require an extension-only native-input capability so page scripts cannot piggyback trusted input while automation is armed.
+- Chrome extension: keep stale summarize stream starts from canceling newer streams after token lookup races.
+- Chrome extension slides: request transcript context after restoring cached slides that do not include timed transcript text.
+- Cache: clean generated slide artifacts when slide cache rows expire, evict, or clear.
 - Release: align the release helper and docs with GitHub assets plus Homebrew/core verification instead of the retired tap flow.
 - Daemon: cap concurrent summarize requests with an env-tunable limit so runaway extension/API clients receive a clear 429 instead of piling up background work.
 - Chrome extension: allow max-size page extraction payloads to reach the daemon instead of failing JSON body parsing before summarization starts.

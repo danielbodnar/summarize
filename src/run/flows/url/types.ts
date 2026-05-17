@@ -29,6 +29,7 @@ export type UrlFlowIo = {
   stderr: NodeJS.WritableStream;
   execFileImpl: ExecFileFn;
   fetch: typeof fetch;
+  urlFetch?: typeof fetch;
 };
 
 export type UrlFlowFlags = {
