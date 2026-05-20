@@ -78,9 +78,11 @@ type ExecuteSummarizeSessionArgs = {
 export function buildSlidesPayload({
   slides,
   port,
+  transcriptTimedText,
 }: {
   slides: SlideExtractionResult;
   port: number;
+  transcriptTimedText?: string | null;
 }): SseSlidesData {
   const baseUrl = `http://127.0.0.1:${port}/v1/slides/${slides.sourceId}`;
   return {
@@ -88,6 +90,7 @@ export function buildSlidesPayload({
     sourceId: slides.sourceId,
     sourceKind: slides.sourceKind,
     ocrAvailable: slides.ocrAvailable,
+    transcriptTimedText: transcriptTimedText ?? null,
     slides: slides.slides.map((slide) => ({
       index: slide.index,
       timestamp: slide.timestamp,
@@ -325,11 +328,11 @@ export async function executeSummarizeSession({
 
       if (resolved === "url") {
         await assertDaemonUrlFetchAllowed(pageUrl);
-        const guardedUrlFetchImpl = createDaemonUrlFetchGuard(fetchImpl);
+        const urlModeFetchImpl = createDaemonUrlFetchGuard(fetchImpl);
         return await streamSummaryForUrl({
           env,
           fetchImpl,
-          urlFetchImpl: guardedUrlFetchImpl,
+          urlFetchImpl: urlModeFetchImpl,
           modelOverride: normalizedModelOverride,
           promptOverride,
           lengthRaw,
@@ -342,13 +345,12 @@ export async function executeSummarizeSession({
           overrides,
           slides: slidesSettings,
           hooks: {
-            ...(includeContentLog
-              ? {
-                  onExtracted: (content) => {
-                    logExtracted = content as unknown as Record<string, unknown>;
-                  },
-                }
-              : {}),
+            onExtracted: (content) => {
+              session.transcriptTimedText = content.transcriptTimedText ?? null;
+              if (includeContentLog) {
+                logExtracted = content as unknown as Record<string, unknown>;
+              }
+            },
             onSlidesExtracted: (slides) => {
               session.slides = slides;
               slideLogState.slidesCount = slides.slides.length;
@@ -372,7 +374,15 @@ export async function executeSummarizeSession({
                   warnings: slides.warnings,
                 });
               }
-              emitSlides(session, buildSlidesPayload({ slides, port }), onSessionEvent);
+              emitSlides(
+                session,
+                buildSlidesPayload({
+                  slides,
+                  port,
+                  transcriptTimedText: session.transcriptTimedText,
+                }),
+                onSessionEvent,
+              );
             },
             onSlidesDone: (result) => {
               emitSlidesDone(session, result, onSessionEvent);
@@ -423,7 +433,15 @@ export async function executeSummarizeSession({
               }
               nextSlides.slides.sort((a, b) => a.index - b.index);
               session.slides = nextSlides;
-              emitSlides(session, buildSlidesPayload({ slides: nextSlides, port }), onSessionEvent);
+              emitSlides(
+                session,
+                buildSlidesPayload({
+                  slides: nextSlides,
+                  port,
+                  transcriptTimedText: session.transcriptTimedText,
+                }),
+                onSessionEvent,
+              );
             },
           },
         });

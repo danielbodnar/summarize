@@ -1,7 +1,6 @@
-import { shouldPreferUrlMode } from "@steipete/summarize-core/content/url";
+import { isYouTubeVideoUrl, shouldPreferUrlMode } from "@steipete/summarize-core/content/url";
 import type { RunStart } from "../../lib/panel-contracts";
 import type { Settings } from "../../lib/settings";
-import { isYouTubeWatchUrl } from "../../lib/youtube-url";
 import type { ExtractResponse } from "./content-script-bridge";
 import type { CachedExtract } from "./extract-cache";
 import { routeExtract, type ExtractorContext, type ExtractorResult } from "./extractors/router";
@@ -29,10 +28,7 @@ type StoreLike = {
 };
 
 type SendFn = (
-  msg:
-    | { type: "run:error"; message: string }
-    | { type: "run:start"; run: RunStart }
-    | { type: "slides:run"; ok: boolean; runId?: string; url?: string; error?: string },
+  msg: { type: "run:error"; message: string } | { type: "run:start"; run: RunStart },
 ) => void;
 
 export async function summarizeActiveTab({
@@ -102,103 +98,42 @@ export async function summarizeActiveTab({
 
   const tab = await getActiveTab(session.windowId);
   if (!tab?.id || !canSummarizeUrl(tab.url)) return;
+  const tabUrl = tab.url ?? "";
+  if (
+    settings.autoSummarize &&
+    ((session.lastSummarizedUrl && urlsMatch(session.lastSummarizedUrl, tabUrl)) ||
+      (session.inflightUrl && urlsMatch(session.inflightUrl, tabUrl))) &&
+    !isManual
+  ) {
+    sendStatus("");
+    return;
+  }
 
   session.runController?.abort();
   const controller = new AbortController();
   session.runController = controller;
+  session.inflightUrl = tabUrl;
+  const isSuperseded = () => controller.signal.aborted || session.runController !== controller;
 
   const prefersUrlMode = Boolean(tab.url && shouldPreferUrlMode(tab.url));
-  const wantsUrlFastPath =
-    Boolean(tab.url && isYouTubeWatchUrl(tab.url)) && opts?.inputMode !== "page" && prefersUrlMode;
+  const wantsUrlDirectPath =
+    Boolean(tab.url && isYouTubeVideoUrl(tab.url)) && opts?.inputMode !== "page" && prefersUrlMode;
 
   let extracted: ExtractResponse & { ok: true };
   let routedResult: Pick<ExtractorResult, "source" | "diagnostics"> | null = null;
-  if (wantsUrlFastPath) {
+  if (wantsUrlDirectPath) {
     logPanel("extractor.route.start", { tabId: tab.id, preferUrl: prefersUrlMode });
     logPanel("extractor.route.preferUrlHardSwitch", { tabId: tab.id });
-    sendStatus(`Fetching transcript… (${reason})`);
-    logPanel("extract:url-fastpath:start", { reason, tabId: tab.id });
-    try {
-      const res = await fetchImpl("http://127.0.0.1:8787/v1/summarize", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${settings.token.trim()}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          url: tab.url,
-          title: tab.title ?? null,
-          mode: "url",
-          extractOnly: true,
-          timestamps: true,
-          ...(opts?.refresh ? { noCache: true } : {}),
-          maxCharacters: null,
-          diagnostics: settings.extendedLogging ? { includeContent: true } : null,
-        }),
-        signal: controller.signal,
-      });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        extracted?: {
-          url: string;
-          title: string | null;
-          truncated: boolean;
-          mediaDurationSeconds?: number | null;
-          transcriptTimedText?: string | null;
-        };
-        error?: string;
-      };
-      if (!res.ok || !json.ok || !json.extracted) {
-        throw new Error(json.error || `${res.status} ${res.statusText}`);
-      }
-      const extractedUrl = json.extracted.url || tab.url;
-      extracted = {
-        ok: true,
-        url: extractedUrl,
-        title: json.extracted.title ?? tab.title ?? null,
-        text: "",
-        truncated: Boolean(json.extracted.truncated),
-        media: { hasVideo: true, hasAudio: true, hasCaptions: true },
-        mediaDurationSeconds: json.extracted.mediaDurationSeconds ?? null,
-      };
-      panelSessionStore.setCachedExtract(tab.id, {
-        url: extractedUrl,
-        title: extracted.title ?? null,
-        text: "",
-        source: "url",
-        truncated: Boolean(json.extracted.truncated),
-        totalCharacters: 0,
-        wordCount: null,
-        media: { hasVideo: true, hasAudio: true, hasCaptions: true },
-        transcriptSource: null,
-        transcriptionProvider: null,
-        transcriptCharacters: null,
-        transcriptWordCount: null,
-        transcriptLines: null,
-        transcriptTimedText: json.extracted.transcriptTimedText ?? null,
-        mediaDurationSeconds: json.extracted.mediaDurationSeconds ?? null,
-        slides: null,
-        diagnostics: null,
-      });
-      session.daemonStatus.markReady();
-      logPanel("extract:url-fastpath:ok", {
-        url: extractedUrl,
-        transcriptTimedText: Boolean(json.extracted.transcriptTimedText),
-        durationSeconds: json.extracted.mediaDurationSeconds ?? null,
-      });
-    } catch (err) {
-      logPanel("extract:url-fastpath:error", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-      extracted = {
-        ok: true,
-        url: tab.url,
-        title: tab.title ?? null,
-        text: "",
-        truncated: false,
-        media: { hasVideo: true, hasAudio: true, hasCaptions: true },
-      };
-    }
+    sendStatus(`Preparing video… (${reason})`);
+    logPanel("extract:url-direct", { reason, tabId: tab.id });
+    extracted = {
+      ok: true,
+      url: tab.url,
+      title: tab.title ?? null,
+      text: "",
+      truncated: false,
+      media: { hasVideo: true, hasAudio: true, hasCaptions: true },
+    };
   } else {
     sendStatus(`Extracting… (${reason})`);
     logPanel("extract:start", { reason, tabId: tab.id, maxChars: settings.maxChars });
@@ -226,6 +161,7 @@ export async function summarizeActiveTab({
           logPanel(event, detail);
         },
       });
+      if (isSuperseded()) return;
       logPanel(extractedAttempt.ok ? "extract:done" : "extract:failed", {
         ok: extractedAttempt.ok,
         ...(extractedAttempt.ok
@@ -260,6 +196,7 @@ export async function summarizeActiveTab({
           logPanel(event, detail);
         },
       });
+      if (isSuperseded()) return;
       logPanel(routed ? "extract:done" : "extract:failed", {
         ok: Boolean(routed),
         ...(routed
@@ -289,6 +226,7 @@ export async function summarizeActiveTab({
       timeoutMs: 8_000,
       log: (event, detail) => logPanel(event, detail),
     });
+    if (isSuperseded()) return;
     if (retry.ok) {
       extracted = retry.data;
       routedResult = null;
@@ -308,21 +246,17 @@ export async function summarizeActiveTab({
         }
       : extracted;
 
-  if (
-    settings.autoSummarize &&
-    ((session.lastSummarizedUrl && urlsMatch(session.lastSummarizedUrl, resolvedExtracted.url)) ||
-      (session.inflightUrl && urlsMatch(session.inflightUrl, resolvedExtracted.url))) &&
-    !isManual
-  ) {
-    sendStatus("");
-    return;
-  }
-
+  if (isSuperseded()) return;
   const resolvedTitle = tab.title?.trim() || resolvedExtracted.title || null;
   const resolvedPayload = { ...resolvedExtracted, title: resolvedTitle };
   const effectiveInputMode =
     opts?.inputMode ??
-    (resolvedPayload.url && shouldPreferUrlMode(resolvedPayload.url) ? "video" : undefined);
+    (resolvedPayload.media?.hasVideo === true ||
+    resolvedPayload.media?.hasAudio === true ||
+    resolvedPayload.media?.hasCaptions === true ||
+    (resolvedPayload.url && isYouTubeVideoUrl(resolvedPayload.url))
+      ? "video"
+      : undefined);
   const wordCount =
     resolvedPayload.text.length > 0 ? resolvedPayload.text.split(/\s+/).filter(Boolean).length : 0;
   const wantsSummaryTimestamps =
@@ -337,9 +271,7 @@ export async function summarizeActiveTab({
     (effectiveInputMode === "video" ||
       resolvedPayload.media?.hasVideo === true ||
       shouldPreferUrlMode(resolvedPayload.url));
-  const wantsParallelSlides = wantsSlides && settings.slidesParallel;
-  const summaryTimestamps = wantsSummaryTimestamps || (wantsSlides && !wantsParallelSlides);
-  const slidesTimestamps = wantsSummaryTimestamps || wantsSlides;
+  const summaryTimestamps = wantsSummaryTimestamps || wantsSlides;
 
   logPanel("summarize:start", {
     reason,
@@ -347,7 +279,7 @@ export async function summarizeActiveTab({
     inputMode: effectiveInputMode ?? null,
     wantsSummaryTimestamps: summaryTimestamps,
     wantsSlides,
-    wantsParallelSlides,
+    wantsParallelSlides: false,
   });
 
   panelSessionStore.setCachedExtract(tab.id, {
@@ -380,7 +312,7 @@ export async function summarizeActiveTab({
         minDurationSeconds: null,
       }
     : { enabled: false as const };
-  const summarySlides = wantsParallelSlides ? { enabled: false as const } : slidesConfig;
+  const summarySlides = slidesConfig;
 
   let id: string;
   try {
@@ -394,8 +326,8 @@ export async function summarizeActiveTab({
     });
     logPanel("summarize:request", {
       url: resolvedPayload.url,
-      slides: wantsSlides && !wantsParallelSlides,
-      slidesParallel: wantsParallelSlides,
+      slides: wantsSlides,
+      slidesParallel: false,
       timestamps: summaryTimestamps,
     });
     const res = await fetchImpl("http://127.0.0.1:8787/v1/summarize", {
@@ -408,13 +340,14 @@ export async function summarizeActiveTab({
       signal: controller.signal,
     });
     const json = (await res.json()) as { ok: boolean; id?: string; error?: string };
+    if (isSuperseded()) return;
     if (!res.ok || !json.ok || !json.id) {
       throw new Error(json.error || `${res.status} ${res.statusText}`);
     }
     session.daemonStatus.markReady();
     id = json.id;
   } catch (err) {
-    if (controller.signal.aborted) return;
+    if (isSuperseded()) return;
     const message = friendlyFetchError(err, "Daemon request failed");
     send({ type: "run:error", message });
     sendStatus(`Error: ${message}`);
@@ -427,55 +360,13 @@ export async function summarizeActiveTab({
 
   send({
     type: "run:start",
-    run: { id, url: resolvedPayload.url, title: resolvedTitle, model: settings.model, reason },
+    run: {
+      id,
+      url: resolvedPayload.url,
+      title: resolvedTitle,
+      model: settings.model,
+      reason,
+      slides: wantsSlides,
+    },
   });
-
-  if (!wantsParallelSlides) return;
-
-  void (async () => {
-    try {
-      const slidesBody = buildSummarizeRequestBody({
-        extracted: resolvedPayload,
-        settings,
-        noCache: Boolean(opts?.refresh),
-        inputMode: effectiveInputMode,
-        timestamps: slidesTimestamps,
-        slides: slidesConfig,
-      });
-      logPanel("slides:request", { url: resolvedPayload.url });
-      const res = await fetchImpl("http://127.0.0.1:8787/v1/summarize", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${settings.token.trim()}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(slidesBody),
-        signal: controller.signal,
-      });
-      const json = (await res.json()) as { ok: boolean; id?: string; error?: string };
-      if (!res.ok || !json.ok || !json.id) {
-        throw new Error(json.error || `${res.status} ${res.statusText}`);
-      }
-      session.daemonStatus.markReady();
-      if (
-        controller.signal.aborted ||
-        session.runController !== controller ||
-        (session.inflightUrl && !urlsMatch(session.inflightUrl, resolvedPayload.url))
-      ) {
-        return;
-      }
-      send({ type: "slides:run", ok: true, runId: json.id, url: resolvedPayload.url });
-    } catch (err) {
-      if (
-        controller.signal.aborted ||
-        session.runController !== controller ||
-        (session.inflightUrl && !urlsMatch(session.inflightUrl, resolvedPayload.url))
-      ) {
-        return;
-      }
-      const message = friendlyFetchError(err, "Slides request failed");
-      logPanel("slides:request:error", { error: message });
-      send({ type: "slides:run", ok: false, error: message });
-    }
-  })();
 }

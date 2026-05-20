@@ -107,6 +107,18 @@ describe("sidepanel slides payload policy", () => {
     expect(slidesPayloadChanged(payload, changed)).toBe(true);
   });
 
+  it("preserves timed transcript text from the slides stream", () => {
+    const normalized = normalizeSlidesPayload({
+      ...buildSlidesPayload({ count: 1, withImages: true }),
+      transcriptTimedText: "[00:01] intro",
+    });
+
+    expect(normalized?.transcriptTimedText).toBe("[00:01] intro");
+    expect(slidesPayloadChanged({ ...normalized!, transcriptTimedText: null }, normalized!)).toBe(
+      true,
+    );
+  });
+
   it("treats repeated malformed timestamps as unchanged after normalization", () => {
     const normalized = normalizeSlidesPayload({
       sourceUrl: "https://example.com",

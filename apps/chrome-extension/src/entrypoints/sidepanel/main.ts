@@ -309,7 +309,7 @@ function stopSlidesSummaryStream() {
 
 function resolveActiveSlidesRunId(): string | null {
   if (panelState.slidesRunId) return panelState.slidesRunId;
-  if (!slidesState.slidesParallel && panelState.runId) return panelState.runId;
+  if (panelState.slides && panelState.runId) return panelState.runId;
   return null;
 }
 
@@ -355,8 +355,13 @@ function attachSummaryRun(run: RunStart) {
     summaryStreamRuntime.setPreserveChatOnNextReset(true);
   }
   metricsController.setActiveMode("summary");
+  const runRequestsSlides =
+    run.slides === true ||
+    (run.slides !== false &&
+      slidesState.slidesEnabled &&
+      (slidesSession.resolveInputMode() === "video" || slidesState.mediaAvailable));
   panelState.runId = run.id;
-  panelState.slidesRunId = slidesState.slidesParallel ? null : run.id;
+  panelState.slidesRunId = runRequestsSlides ? run.id : null;
   panelState.currentSource = { url: run.url, title: run.title };
   currentRunTabId = activeTabId;
   headerController.setBaseTitle(run.title || run.url || "Summarize");
@@ -369,11 +374,11 @@ function attachSummaryRun(run: RunStart) {
       modelLabel: fallbackModel,
     };
   }
-  slidesState.pendingRunForPlannedSlides = run;
+  slidesState.pendingRunForPlannedSlides = runRequestsSlides ? run : null;
   if (!panelState.summaryMarkdown?.trim()) {
     renderMarkdownDisplay();
   }
-  if (!slidesState.slidesParallel) {
+  if (runRequestsSlides) {
     startSlidesStream(run);
   }
   void streamController.start(run);
@@ -905,7 +910,7 @@ registerSidepanelTestHooks({
   applySummarySnapshot: (payload) => {
     resetSummaryView({ preserveChat: false, clearRunId: false, stopSlides: false });
     panelState.runId = payload.run.id;
-    panelState.slidesRunId = slidesState.slidesParallel ? null : payload.run.id;
+    panelState.slidesRunId = payload.run.slides ? payload.run.id : null;
     panelState.currentSource = { url: payload.run.url, title: payload.run.title };
     currentRunTabId = activeTabId;
     headerController.setBaseTitle(payload.run.title || payload.run.url || "Summarize");

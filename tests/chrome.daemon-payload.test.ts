@@ -91,6 +91,26 @@ describe("chrome/daemon-payload", () => {
     expect(body.videoMode).toBe("transcript");
   });
 
+  it("keeps YouTube video input on CLI-compatible url mode", () => {
+    const body = buildSummarizeRequestBody({
+      extracted: {
+        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        title: "Video",
+        text: "",
+        truncated: false,
+      },
+      settings: defaultSettings,
+      inputMode: "video",
+      timestamps: true,
+      slides: { enabled: true },
+    });
+
+    expect(body.mode).toBe("url");
+    expect(body.videoMode).toBeUndefined();
+    expect(body.timestamps).toBe(true);
+    expect(body.slides).toBe(true);
+  });
+
   it("forces page mode when inputMode=page", () => {
     const body = buildSummarizeRequestBody({
       extracted: {

@@ -23,6 +23,7 @@ export type Session = {
     inputSummary: string | null;
     summaryFromCache: boolean | null;
   };
+  transcriptTimedText: string | null;
   slides: SlideExtractionResult | null;
 };
 
@@ -49,6 +50,7 @@ export function createSession(idFactory: () => string): Session {
       inputSummary: null,
       summaryFromCache: null,
     },
+    transcriptTimedText: null,
     slides: null,
   };
 }

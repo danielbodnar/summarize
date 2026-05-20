@@ -31,7 +31,14 @@ export async function handleSessionRoutes(options: {
     json(
       res,
       200,
-      { ok: true, slides: buildSlidesPayload({ slides: session.slides, port }) },
+      {
+        ok: true,
+        slides: buildSlidesPayload({
+          slides: session.slides,
+          port,
+          transcriptTimedText: session.transcriptTimedText,
+        }),
+      },
       cors,
     );
     return true;
@@ -196,7 +203,11 @@ export async function handleSessionRoutes(options: {
           res.write(
             encodeSseEvent({
               event: "slides",
-              data: buildSlidesPayload({ slides: session.slides, port }),
+              data: buildSlidesPayload({
+                slides: session.slides,
+                port,
+                transcriptTimedText: session.transcriptTimedText,
+              }),
             }),
           );
         }

@@ -128,6 +128,8 @@ export async function runUrlFlow({
   let backgroundSlidesPromise: Promise<SlideExtractionResult | null> | null = null;
   try {
     let extracted = await extractionSession.fetchInitialExtract(url);
+    let emittedExtracted = extracted;
+    activeHooks.onExtracted?.(extracted);
     ctx.perfTrace?.mark("url:extracted");
     let extractionUi = deriveExtractionUi(extracted);
 
@@ -214,6 +216,10 @@ export async function runUrlFlow({
     extracted = videoOnlyResult.extracted;
     extractionUi = videoOnlyResult.extractionUi;
     slidesSession.setExtracted(extracted);
+    if (extracted !== emittedExtracted) {
+      emittedExtracted = extracted;
+      activeHooks.onExtracted?.(extracted);
+    }
     updateSummaryProgress();
 
     if (flags.slides) {
@@ -230,8 +236,6 @@ export async function runUrlFlow({
         return null;
       });
     }
-
-    activeHooks.onExtracted?.(extracted);
 
     let slidesForPrompt: SlideExtractionResult | null = null;
     if (slidesSession.slidesTimelinePromise) {

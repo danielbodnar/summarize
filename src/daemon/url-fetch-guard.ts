@@ -179,6 +179,10 @@ function getRedirectMode(
   );
 }
 
+function isNativeFetchImpl(fetchImpl: typeof fetch): boolean {
+  return fetchImpl === globalThis.fetch || fetchImpl.name === "bound fetch";
+}
+
 export function createDaemonUrlFetchGuard(
   fetchImpl: typeof fetch,
   { lookup = defaultLookup }: { lookup?: LookupFn } = {},
@@ -222,9 +226,7 @@ export function createDaemonUrlFetchGuard(
           } as Parameters<typeof fetch>[1] & { dispatcher: unknown })
         : init;
     const pinnedFetchImpl =
-      target.addresses.length > 0 && fetchImpl === globalThis.fetch
-        ? loadUndici().fetch
-        : fetchImpl;
+      target.addresses.length > 0 && isNativeFetchImpl(fetchImpl) ? loadUndici().fetch : fetchImpl;
     if (redirectMode !== "follow") {
       return await pinnedFetchImpl(input, pinnedInit);
     }

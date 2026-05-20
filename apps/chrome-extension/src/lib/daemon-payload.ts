@@ -1,4 +1,5 @@
 import type { Settings } from "./settings";
+import { isYouTubeWatchUrl } from "./youtube-url";
 
 export type ExtractedPage = {
   url: string;
@@ -91,10 +92,12 @@ export function buildSummarizeRequestBody({
       }
     : {};
   if (inputMode === "video") {
+    const videoOverrides = isYouTubeWatchUrl(extracted.url)
+      ? { mode: "url" }
+      : { mode: "url", videoMode: "transcript" };
     return {
       ...withTimestamps,
-      mode: "url",
-      videoMode: "transcript",
+      ...videoOverrides,
       ...slidesSettings,
     };
   }

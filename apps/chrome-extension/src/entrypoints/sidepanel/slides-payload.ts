@@ -46,11 +46,15 @@ export function normalizeSlidesPayload(data: unknown): SlidesPayload | null {
   }
   if (slidesByIndex.size === 0) return null;
 
+  const transcriptTimedText =
+    typeof payload.transcriptTimedText === "string" ? payload.transcriptTimedText : null;
+
   return {
     sourceUrl: typeof payload.sourceUrl === "string" ? payload.sourceUrl : "",
     sourceId,
     sourceKind: typeof payload.sourceKind === "string" ? payload.sourceKind : "unknown",
     ocrAvailable: payload.ocrAvailable === true,
+    ...(transcriptTimedText ? { transcriptTimedText } : {}),
     slides: Array.from(slidesByIndex.values()).sort((a, b) => a.index - b.index),
   };
 }
@@ -85,6 +89,7 @@ export function slidesPayloadChanged(prev: SlidesPayload | null, next: SlidesPay
     if ((current.ocrConfidence ?? null) !== (prior.ocrConfidence ?? null)) return true;
   }
   if (next.ocrAvailable !== prev.ocrAvailable) return true;
+  if ((next.transcriptTimedText ?? null) !== (prev.transcriptTimedText ?? null)) return true;
   return false;
 }
 

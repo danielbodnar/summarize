@@ -163,6 +163,12 @@ export function createUrlExtractionSession({
       }
       return extracted;
     } catch (err) {
+      const errorMessage =
+        err instanceof Error
+          ? [err.message, err.cause instanceof Error ? err.cause.message : null]
+              .filter(Boolean)
+              .join(": ")
+          : String(err);
       const preferUrlMode =
         typeof urlUtils.shouldPreferUrlMode === "function"
           ? urlUtils.shouldPreferUrlMode(targetUrl)
@@ -173,7 +179,7 @@ export function createUrlExtractionSession({
       writeVerbose(
         io.stderr,
         flags.verbose,
-        `extract fallback url-only (${(err as Error).message ?? String(err)})`,
+        `extract fallback url-only (${errorMessage})`,
         flags.verboseColor,
         io.envForRun,
       );
@@ -204,13 +210,13 @@ export function createUrlExtractionSession({
             used: false,
             cacheMode: cacheState.mode,
             cacheStatus: "bypassed",
-            notes: "skipped (url-only fallback)",
+            notes: `skipped (url-only fallback: ${errorMessage})`,
           },
           markdown: {
             requested: false,
             used: false,
             provider: null,
-            notes: "skipped (url fallback)",
+            notes: `skipped (url fallback: ${errorMessage})`,
           },
           transcript: {
             cacheMode: cacheState.mode,

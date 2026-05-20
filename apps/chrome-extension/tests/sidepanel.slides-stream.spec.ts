@@ -53,13 +53,6 @@ test("sidepanel reconnects cached slide runs after tab restore", async ({
         body: sseBody("Summary A"),
       });
     });
-    await page.route("http://127.0.0.1:8787/v1/summarize/slides-a/events", async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { "content-type": "text/event-stream" },
-        body: sseBody("Slides summary A"),
-      });
-    });
 
     const slidesPayload = {
       sourceUrl: "https://www.youtube.com/watch?v=cache123",
@@ -84,7 +77,7 @@ test("sidepanel reconnects cached slide runs after tab restore", async ({
       "",
     ].join("\n");
     let slidesEventsRequests = 0;
-    await page.route("http://127.0.0.1:8787/v1/summarize/slides-a/slides/events", async (route) => {
+    await page.route("http://127.0.0.1:8787/v1/summarize/run-a/slides/events", async (route) => {
       slidesEventsRequests += 1;
       if (slidesEventsRequests === 1) {
         await new Promise((resolve) => setTimeout(resolve, 2_000));
@@ -147,16 +140,10 @@ test("sidepanel reconnects cached slide runs after tab restore", async ({
         title: "Cached Video",
         model: "auto",
         reason: "manual",
+        slides: true,
       },
     });
     await expect(page.locator("#render")).toContainText("Summary A");
-
-    await sendBgMessage(harness, {
-      type: "slides:run",
-      ok: true,
-      runId: "slides-a",
-      url: "https://www.youtube.com/watch?v=cache123",
-    });
     await expect.poll(async () => slidesEventsRequests).toBe(1);
 
     await sendBgMessage(harness, { type: "ui:state", state: tabBState });
@@ -173,7 +160,7 @@ test("sidepanel reconnects cached slide runs after tab restore", async ({
   }
 });
 
-test("sidepanel retry requests a fresh run when parallel slides have no run id", async ({
+test("sidepanel retry restarts the active single-run slide stream", async ({
   browserName: _browserName,
 }, testInfo) => {
   const harness = await launchExtension(getBrowserFromProject(testInfo.project.name));
@@ -190,9 +177,11 @@ test("sidepanel retry requests a fresh run when parallel slides have no run id",
     await waitForPanelPort(panel);
     await waitForSettingsHydratedHook(panel);
 
+    let slideEventsRequests = 0;
     await panel.route("http://127.0.0.1:8787/v1/summarize/**/events", async (route) => {
       const requestUrl = route.request().url();
       if (requestUrl.includes("/slides/events")) {
+        slideEventsRequests += 1;
         await route.fulfill({
           status: 200,
           headers: { "content-type": "text/event-stream" },
@@ -211,6 +200,13 @@ test("sidepanel retry requests a fresh run when parallel slides have no run id",
           "data: {}",
           "",
         ].join("\n"),
+      });
+    });
+    await panel.route("http://127.0.0.1:8787/v1/summarize/**/slides", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ok: false, error: "No slides yet" }),
       });
     });
 
@@ -235,9 +231,11 @@ test("sidepanel retry requests a fresh run when parallel slides have no run id",
         title: "Retry Video",
         model: "auto",
         reason: "manual",
+        slides: true,
       },
     });
     await expect(panel.locator("#render")).toContainText("Video summary");
+    await expect.poll(async () => slideEventsRequests).toBe(1);
 
     await sendBgMessage(harness, {
       type: "slides:run",
@@ -263,22 +261,20 @@ test("sidepanel retry requests a fresh run when parallel slides have no run id",
       };
     });
     await panel.locator("#slideNoticeRetry").click();
-    await expect
-      .poll(async () => {
-        return await panel.evaluate(() => {
-          return (
-            (
-              window as typeof globalThis & {
-                __capturedPanelMessages?: Array<{ type?: string; refresh?: boolean }>;
-              }
-            ).__capturedPanelMessages ?? []
-          ).map((message) => ({
-            type: message.type ?? null,
-            refresh: message.refresh ?? null,
-          }));
-        });
-      })
-      .toContainEqual({ type: "panel:summarize", refresh: true });
+    await expect.poll(async () => slideEventsRequests).toBe(2);
+    const captured = await panel.evaluate(() => {
+      return (
+        (
+          window as typeof globalThis & {
+            __capturedPanelMessages?: Array<{ type?: string; refresh?: boolean }>;
+          }
+        ).__capturedPanelMessages ?? []
+      ).map((message) => ({
+        type: message.type ?? null,
+        refresh: message.refresh ?? null,
+      }));
+    });
+    expect(captured).not.toContainEqual({ type: "panel:summarize", refresh: true });
 
     assertNoErrors(harness);
   } finally {

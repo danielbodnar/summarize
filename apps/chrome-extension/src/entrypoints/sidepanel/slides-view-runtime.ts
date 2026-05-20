@@ -307,7 +307,14 @@ export function createSlidesViewRuntime({
       setSlidesContextPending(false);
       setSlidesContextUrl(null);
       setSlidesTranscriptTimedText(null);
-      void requestSlidesContext();
+      if (!normalized.transcriptTimedText) {
+        void requestSlidesContext();
+      }
+    }
+    if (normalized.transcriptTimedText) {
+      setSlidesTranscriptTimedText(normalized.transcriptTimedText);
+      setSlidesContextUrl(normalized.sourceUrl || state.currentSourceUrl || null);
+      setSlidesContextPending(false);
     }
     updateSlidesTextState();
     if (state.panelState.summaryMarkdown) {

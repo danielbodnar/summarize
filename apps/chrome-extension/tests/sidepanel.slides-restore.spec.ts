@@ -356,13 +356,6 @@ test("sidepanel starts pending slides after returning to a tab with seeded place
         body: summaryBody("Summary A"),
       });
     });
-    await page.route("http://127.0.0.1:8787/v1/summarize/slides-a/events", async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { "content-type": "text/event-stream" },
-        body: summaryBody("Slides summary A"),
-      });
-    });
     await page.route("http://127.0.0.1:8787/v1/summarize/**/slides", async (route) => {
       await route.fulfill({
         status: 200,
@@ -370,20 +363,23 @@ test("sidepanel starts pending slides after returning to a tab with seeded place
         body: JSON.stringify({ ok: true, slides: slidesPayload }),
       });
     });
-    await page.route("http://127.0.0.1:8787/v1/summarize/slides-a/slides/events", async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { "content-type": "text/event-stream" },
-        body: [
-          "event: slides",
-          `data: ${JSON.stringify(slidesPayload)}`,
-          "",
-          "event: done",
-          "data: {}",
-          "",
-        ].join("\n"),
-      });
-    });
+    await page.route(
+      "http://127.0.0.1:8787/v1/summarize/summary-a/slides/events",
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+          body: [
+            "event: slides",
+            `data: ${JSON.stringify(slidesPayload)}`,
+            "",
+            "event: done",
+            "data: {}",
+            "",
+          ].join("\n"),
+        });
+      },
+    );
 
     const placeholderPng = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3kq0cAAAAASUVORK5CYII=",
@@ -433,29 +429,17 @@ test("sidepanel starts pending slides after returning to a tab with seeded place
         title: "Alpha Video",
         model: "auto",
         reason: "manual",
+        slides: true,
       },
     });
     await expect
       .poll(async () => (await getPanelSlidesTimeline(page)).length, { timeout: 10_000 })
-      .toBeGreaterThan(1);
+      .toBe(1);
 
     await sendBgMessage(harness, { type: "ui:state", state: tabBState });
     await expect(page.locator("#title")).toHaveText("Bravo Tab");
-    const waitForSlidesEvents = page.waitForResponse(
-      (response) =>
-        response.url().includes("/v1/summarize/slides-a/slides/events") &&
-        response.status() === 200,
-      { timeout: 10_000 },
-    );
-    await sendBgMessage(harness, {
-      type: "slides:run",
-      ok: true,
-      runId: "slides-a",
-      url: targetUrl,
-    });
     await sendBgMessage(harness, { type: "ui:state", state: tabAState });
     await expect(page.locator("#title")).toHaveText("Alpha Video");
-    await waitForSlidesEvents;
 
     await expect.poll(async () => (await getPanelSlidesTimeline(page)).length).toBe(1);
     const slides = await getPanelSlideDescriptions(page);

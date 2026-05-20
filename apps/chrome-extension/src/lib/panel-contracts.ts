@@ -31,6 +31,7 @@ export type RunStart = {
   title: string | null;
   model: string;
   reason: string;
+  slides?: boolean;
 };
 
 type PanelCacheMeta = {

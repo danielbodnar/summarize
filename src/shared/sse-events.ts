@@ -12,6 +12,7 @@ export type SseSlidesData = {
   sourceId: string;
   sourceKind: string;
   ocrAvailable: boolean;
+  transcriptTimedText?: string | null;
   slides: Array<{
     index: number;
     timestamp: number;
