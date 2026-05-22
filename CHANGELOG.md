@@ -4,6 +4,10 @@
 
 ### Fixes
 
+## 0.16.3 - 2026-05-22
+
+### Fixes
+
 - Daemon: coalesce duplicate active summarize requests so sidebar retries/reconnects reuse the same stream instead of racing slide summary state.
 
 ## 0.16.2 - 2026-05-22
