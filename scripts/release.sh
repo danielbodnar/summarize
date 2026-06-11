@@ -265,12 +265,15 @@ phase_smoke() {
       exit 1
       ;;
   esac
-  dlx_version="$(pnpm -s dlx "@steipete/summarize@${version}" --version)"
+  dlx_version="$(
+    pnpm --config.minimum-release-age=0 -s dlx "@steipete/summarize@${version}" --version
+  )"
   if [ "${dlx_version}" != "${version}" ]; then
     echo "pnpm dlx reported ${dlx_version}, expected ${version}"
     exit 1
   fi
-  run bash -c "pnpm -s dlx @steipete/summarize@${version} --help >/dev/null"
+  run bash -c \
+    "pnpm --config.minimum-release-age=0 -s dlx @steipete/summarize@${version} --help >/dev/null"
   echo "ok"
 }
 
