@@ -6,7 +6,7 @@ import { runCli } from "../../src/run.js";
 const LIVE = process.env.SUMMARIZE_LIVE_TEST === "1";
 
 (LIVE ? describe : describe.skip)("live mickel.tech inline CSS perf", () => {
-  it("extracts quickly (guards jsdom inline CSS slowness)", async () => {
+  it("extracts quickly with large inline CSS", async () => {
     let stdoutText = "";
     let stderrText = "";
 

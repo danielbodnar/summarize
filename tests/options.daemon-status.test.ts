@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { createDaemonStatusChecker } from "../apps/chrome-extension/src/entrypoints/options/daemon-status.js";
 

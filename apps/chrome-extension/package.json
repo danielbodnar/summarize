@@ -19,15 +19,15 @@
   "dependencies": {
     "@mozilla/readability": "0.6.0",
     "@steipete/summarize-core": "workspace:*",
-    "@zag-js/checkbox": "^1.41.2",
-    "@zag-js/preact": "^1.41.2",
-    "@zag-js/select": "^1.41.2",
+    "@zag-js/checkbox": "^1.41.1",
+    "@zag-js/preact": "^1.41.1",
+    "@zag-js/select": "^1.41.1",
     "markdown-it": "^14.2.0",
     "preact": "10.29.2"
   },
   "devDependencies": {
     "@playwright/test": "1.60.0",
-    "@types/chrome": "^0.1.43",
+    "@types/chrome": "^0.1.42",
     "typescript": "^6.0.3",
     "wxt": "0.20.26"
   }

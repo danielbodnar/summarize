@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import type { PanelCachePayload } from "../apps/chrome-extension/src/entrypoints/sidepanel/panel-cache";
 import { createSummaryViewRuntime } from "../apps/chrome-extension/src/entrypoints/sidepanel/summary-view-runtime";

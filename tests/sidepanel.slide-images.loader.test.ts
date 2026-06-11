@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSlideImageLoader } from "../apps/chrome-extension/src/entrypoints/sidepanel/slide-images";
 import type { Settings } from "../apps/chrome-extension/src/lib/settings";

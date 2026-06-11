@@ -3,6 +3,10 @@ import https from "node:https";
 import { Readable } from "node:stream";
 import { readDnsPinnedAddresses, type DnsPinnedAddress } from "./fetch-capabilities.js";
 
+// DNS pinning must connect directly; an environment proxy would resolve the hostname itself.
+const directHttpAgent = new http.Agent({ proxyEnv: {} });
+const directHttpsAgent = new https.Agent({ proxyEnv: {} });
+
 type PinnedLookupAddress = { address: string; family: number };
 type LookupCallback = (
   error: Error | null,
@@ -70,6 +74,7 @@ export async function fetchWithDnsPinnedAddresses(
     const req = client.request(
       url,
       {
+        agent: url.protocol === "https:" ? directHttpsAgent : directHttpAgent,
         headers,
         lookup: createPinnedLookup(addresses),
         method: methodFrom(input, init),

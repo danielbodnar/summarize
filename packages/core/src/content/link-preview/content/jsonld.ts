@@ -1,4 +1,4 @@
-import { load } from "cheerio";
+import { parseHtmlDocument } from "../../html-document.js";
 import { normalizeCandidate } from "./cleaner.js";
 
 export type JsonLdContent = {
@@ -8,13 +8,13 @@ export type JsonLdContent = {
 };
 
 export function extractJsonLdContent(html: string): JsonLdContent | null {
+  const parsed = parseHtmlDocument(html);
   try {
-    const $ = load(html);
-    const scripts = $('script[type="application/ld+json"]').toArray();
+    const scripts = parsed.document.querySelectorAll('script[type="application/ld+json"]');
     const candidates: JsonLdContent[] = [];
 
     for (const script of scripts) {
-      const raw = $(script).text();
+      const raw = script.textContent;
       if (!raw) continue;
       try {
         const data = JSON.parse(raw);
@@ -38,6 +38,8 @@ export function extractJsonLdContent(html: string): JsonLdContent | null {
     return sorted[0] ?? null;
   } catch {
     return null;
+  } finally {
+    parsed.close();
   }
 }
 

@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { createModelPresetsController } from "../apps/chrome-extension/src/entrypoints/options/model-presets.js";
 

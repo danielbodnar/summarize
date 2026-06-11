@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 
 import { describe, expect, it } from "vitest";
 import { createTypographyController } from "../apps/chrome-extension/src/entrypoints/sidepanel/typography-controller.js";

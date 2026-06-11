@@ -1,5 +1,3 @@
-import { compact } from "es-toolkit";
-
 const WORD_SPLIT_PATTERN = /\s+/g;
 
 export interface ContentBudgetResult {
@@ -78,6 +76,9 @@ export function applyContentBudget(
   const truncated = totalCharacters > maxCharacters;
   const clipped = truncated ? clipAtSentenceBoundary(baseContent, maxCharacters) : baseContent;
   const content = clipped.trim();
-  const wordCount = content.length > 0 ? compact(content.split(WORD_SPLIT_PATTERN)).length : 0;
+  const wordCount =
+    content.length > 0
+      ? content.split(WORD_SPLIT_PATTERN).filter((part) => part.length > 0).length
+      : 0;
   return { content, truncated, totalCharacters, wordCount };
 }

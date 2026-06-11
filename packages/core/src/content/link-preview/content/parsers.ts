@@ -1,4 +1,4 @@
-import { type CheerioAPI, load } from "cheerio";
+import { parseHtmlDocument } from "../../html-document.js";
 import { decodeHtmlEntities, normalizeCandidate } from "./cleaner.js";
 import { pickFirstText, safeHostname } from "./utils.js";
 
@@ -16,34 +16,39 @@ export interface ParsedMetadata {
 }
 
 export function extractMetadataFromHtml(html: string, url: string): ParsedMetadata {
-  const $ = load(html);
+  const parsed = parseHtmlDocument(html);
+  const { document } = parsed;
 
-  const title = pickFirstText([
-    pickMetaContent($, [
-      { attribute: "property", value: "og:title" },
-      { attribute: "name", value: "og:title" },
-      { attribute: "name", value: "twitter:title" },
-    ]),
-    extractTagText($, "title"),
-  ]);
+  try {
+    const title = pickFirstText([
+      pickMetaContent(document, [
+        { attribute: "property", value: "og:title" },
+        { attribute: "name", value: "og:title" },
+        { attribute: "name", value: "twitter:title" },
+      ]),
+      extractTagText(document, "title"),
+    ]);
 
-  const description = pickFirstText([
-    pickMetaContent($, [
-      { attribute: "property", value: "og:description" },
-      { attribute: "name", value: "description" },
-      { attribute: "name", value: "twitter:description" },
-    ]),
-  ]);
+    const description = pickFirstText([
+      pickMetaContent(document, [
+        { attribute: "property", value: "og:description" },
+        { attribute: "name", value: "description" },
+        { attribute: "name", value: "twitter:description" },
+      ]),
+    ]);
 
-  const siteName = pickFirstText([
-    pickMetaContent($, [
-      { attribute: "property", value: "og:site_name" },
-      { attribute: "name", value: "application-name" },
-    ]),
-    safeHostname(url),
-  ]);
+    const siteName = pickFirstText([
+      pickMetaContent(document, [
+        { attribute: "property", value: "og:site_name" },
+        { attribute: "name", value: "application-name" },
+      ]),
+      safeHostname(url),
+    ]);
 
-  return { title, description, siteName };
+    return { title, description, siteName };
+  } finally {
+    parsed.close();
+  }
 }
 
 export function extractMetadataFromFirecrawl(
@@ -62,13 +67,11 @@ export function extractMetadataFromFirecrawl(
   };
 }
 
-function pickMetaContent($: CheerioAPI, selectors: MetaSelector[]): string | null {
+function pickMetaContent(document: Document, selectors: MetaSelector[]): string | null {
   for (const selector of selectors) {
-    const meta = $(`meta[${selector.attribute}="${selector.value}"]`).first();
-    if (meta.length === 0) {
-      continue;
-    }
-    const value = meta.attr("content") ?? meta.attr("value") ?? "";
+    const meta = document.querySelector(`meta[${selector.attribute}="${selector.value}"]`);
+    if (!meta) continue;
+    const value = meta.getAttribute("content") ?? meta.getAttribute("value") ?? "";
     const normalized = normalizeCandidate(decodeHtmlEntities(value));
     if (normalized) {
       return normalized;
@@ -77,16 +80,14 @@ function pickMetaContent($: CheerioAPI, selectors: MetaSelector[]): string | nul
   return null;
 }
 
-function extractTagText($: CheerioAPI, tagName: string): string | null {
+function extractTagText(document: Document, tagName: string): string | null {
   const normalizedTag = tagName.trim().toLowerCase();
   if (!ALLOWED_TEXT_TAGS.has(normalizedTag)) {
     return null;
   }
-  const element = $(normalizedTag).first();
-  if (element.length === 0) {
-    return null;
-  }
-  const text = decodeHtmlEntities(element.text());
+  const element = document.querySelector(normalizedTag);
+  if (!element) return null;
+  const text = decodeHtmlEntities(element.textContent ?? "");
   return normalizeCandidate(text);
 }
 

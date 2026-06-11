@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -11,6 +11,13 @@ describe("sidepanel summary renderer", () => {
     const button = document.createElement("button");
     button.className = "hidden";
     return button;
+  }
+
+  function setClipboard(writeText: (value: string) => Promise<void>) {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
   }
 
   it("renders and clears empty states", () => {
@@ -79,11 +86,7 @@ describe("sidepanel summary renderer", () => {
     const copyButtonEl = createHeaderCopyButton();
     const setStatus = vi.fn();
     const writeText = vi.fn(async () => {});
-    Object.assign(navigator, {
-      clipboard: {
-        writeText,
-      },
-    });
+    setClipboard(writeText);
 
     renderSummaryMarkdownDisplay({
       activeTabUrl: "https://example.com/watch",
@@ -117,11 +120,7 @@ describe("sidepanel summary renderer", () => {
     const copyButtonEl = createHeaderCopyButton();
     const setStatus = vi.fn();
     const writeText = vi.fn(async () => {});
-    Object.assign(navigator, {
-      clipboard: {
-        writeText,
-      },
-    });
+    setClipboard(writeText);
 
     renderSummaryMarkdownDisplay({
       activeTabUrl: "https://example.com/watch",
@@ -157,11 +156,7 @@ describe("sidepanel summary renderer", () => {
       throw new Error("blocked");
     });
     const execCommand = vi.fn(() => true);
-    Object.assign(navigator, {
-      clipboard: {
-        writeText,
-      },
-    });
+    setClipboard(writeText);
     Object.assign(document, { execCommand });
 
     renderSummaryMarkdownDisplay({
@@ -199,11 +194,7 @@ describe("sidepanel summary renderer", () => {
       throw new Error("blocked");
     });
     const execCommand = vi.fn(() => false);
-    Object.assign(navigator, {
-      clipboard: {
-        writeText,
-      },
-    });
+    setClipboard(writeText);
     Object.assign(document, { execCommand });
 
     renderSummaryMarkdownDisplay({

@@ -1,4 +1,4 @@
-import { load } from "cheerio";
+import { parseHtmlDocument } from "../html-document.js";
 import { extractYouTubeVideoId } from "../url.js";
 
 export { extractYouTubeVideoId, isYouTubeUrl, isYouTubeVideoUrl } from "../url.js";
@@ -11,8 +11,6 @@ const MAX_EMBED_YOUTUBE_READABILITY_CHARS = 2000;
 
 type ReadabilityDeps = {
   Readability: typeof import("@mozilla/readability").Readability;
-  JSDOM: typeof import("jsdom").JSDOM;
-  VirtualConsole: typeof import("jsdom").VirtualConsole;
 };
 
 let readabilityDepsPromise: Promise<ReadabilityDeps> | null = null;
@@ -20,11 +18,8 @@ let readabilityDepsPromise: Promise<ReadabilityDeps> | null = null;
 async function loadReadabilityDeps(): Promise<ReadabilityDeps> {
   if (!readabilityDepsPromise) {
     readabilityDepsPromise = (async () => {
-      const [{ Readability }, { JSDOM, VirtualConsole }] = await Promise.all([
-        import("@mozilla/readability"),
-        import("jsdom"),
-      ]);
-      return { Readability, JSDOM, VirtualConsole };
+      const { Readability } = await import("@mozilla/readability");
+      return { Readability };
     })();
   }
   return readabilityDepsPromise;
@@ -33,22 +28,14 @@ async function loadReadabilityDeps(): Promise<ReadabilityDeps> {
 async function extractReadabilityText(html: string): Promise<string> {
   try {
     const cleanedHtml = stripCssFromHtml(html);
-    const { Readability, JSDOM, VirtualConsole } = await loadReadabilityDeps();
-    const virtualConsole = new VirtualConsole();
-    virtualConsole.on("jsdomError", (err) => {
-      const message =
-        err && typeof err === "object" && "message" in err
-          ? String((err as { message?: unknown }).message ?? "")
-          : "";
-      if (message.includes("Could not parse CSS stylesheet")) return;
-      console.error(err);
-    });
-
-    const dom = new JSDOM(cleanedHtml, { virtualConsole });
-    const reader = new Readability(dom.window.document);
-    const article = reader.parse();
-    const text = (article?.textContent ?? "").replace(/\s+/g, " ").trim();
-    return text;
+    const { Readability } = await loadReadabilityDeps();
+    const parsed = parseHtmlDocument(cleanedHtml);
+    try {
+      const article = new Readability(parsed.document).parse();
+      return (article?.textContent ?? "").replace(/\s+/g, " ").trim();
+    } finally {
+      parsed.close();
+    }
   } catch {
     return "";
   }
@@ -63,9 +50,10 @@ export async function extractEmbeddedYouTubeUrlFromHtml(
   maxTextChars = MAX_EMBED_YOUTUBE_TEXT_CHARS,
   maxReadabilityChars = MAX_EMBED_YOUTUBE_READABILITY_CHARS,
 ): Promise<string | null> {
+  const parsed = parseHtmlDocument(html);
   try {
-    const $ = load(html);
-    const rawText = $("body").text() || $.text();
+    const { document } = parsed;
+    const rawText = document.body?.textContent ?? document.documentElement?.textContent ?? "";
     const normalizedText = rawText.replace(/\s+/g, " ").trim();
 
     if (normalizedText.length > maxTextChars) {
@@ -80,15 +68,17 @@ export async function extractEmbeddedYouTubeUrlFromHtml(
     const candidates: string[] = [];
 
     const iframeSrc =
-      $('iframe[src*="youtube.com/embed/"], iframe[src*="youtu.be/"]').first().attr("src") ?? null;
+      document
+        .querySelector('iframe[src*="youtube.com/embed/"], iframe[src*="youtu.be/"]')
+        ?.getAttribute("src") ?? null;
     if (iframeSrc) candidates.push(iframeSrc);
 
     const ogVideo =
-      $(
-        'meta[property="og:video"], meta[property="og:video:url"], meta[property="og:video:secure_url"], meta[name="og:video"], meta[name="og:video:url"], meta[name="og:video:secure_url"]',
-      )
-        .first()
-        .attr("content") ?? null;
+      document
+        .querySelector(
+          'meta[property="og:video"], meta[property="og:video:url"], meta[property="og:video:secure_url"], meta[name="og:video"], meta[name="og:video:url"], meta[name="og:video:secure_url"]',
+        )
+        ?.getAttribute("content") ?? null;
     if (ogVideo) candidates.push(ogVideo);
 
     for (const candidate of candidates) {
@@ -101,6 +91,8 @@ export async function extractEmbeddedYouTubeUrlFromHtml(
     }
   } catch {
     return null;
+  } finally {
+    parsed.close();
   }
   return null;
 }
@@ -126,12 +118,12 @@ export function decodeHtmlEntities(input: string): string {
 }
 
 export function extractYoutubeBootstrapConfig(html: string): Record<string, unknown> | null {
+  const parsed = parseHtmlDocument(html);
   try {
-    const $ = load(html);
-    const scripts = $("script").toArray();
+    const scripts = parsed.document.querySelectorAll("script");
 
     for (const script of scripts) {
-      const source = $(script).html();
+      const source = script.textContent;
       if (!source) {
         continue;
       }
@@ -143,6 +135,8 @@ export function extractYoutubeBootstrapConfig(html: string): Record<string, unkn
     }
   } catch {
     // fall through to legacy regex
+  } finally {
+    parsed.close();
   }
 
   return parseBootstrapFromScript(html);

@@ -1,4 +1,4 @@
-import { load } from "cheerio";
+import { parseHtmlDocument, serializeHtmlDocument } from "../../html-document.js";
 
 const COMMENT_PATTERN = /<!--[\s\S]*?-->/g;
 const CSS_COMMENT_PATTERN = /\/\*[\s\S]*?\*\//g;
@@ -110,21 +110,22 @@ function shouldStripElement(
 export function stripHiddenHtml(html: string): string {
   if (!html) return html;
   const withoutComments = html.replace(COMMENT_PATTERN, "");
-  const $ = load(withoutComments);
+  const parsed = parseHtmlDocument(withoutComments);
 
-  $("*").each((_, element) => {
-    if (!("tagName" in element) || typeof element.tagName !== "string") return;
-    const tagName = element.tagName.toLowerCase();
-    const attribs = "attribs" in element && element.attribs ? element.attribs : {};
-    const attributes: AttributeMap = {};
-    for (const [key, value] of Object.entries(attribs)) {
-      attributes[key.toLowerCase()] = value?.toLowerCase?.() ?? "";
+  try {
+    for (const element of parsed.document.querySelectorAll("*")) {
+      const tagName = element.tagName.toLowerCase();
+      const attributes: AttributeMap = {};
+      for (const attribute of element.attributes) {
+        attributes[attribute.name.toLowerCase()] = attribute.value.toLowerCase();
+      }
+      if (shouldStripElement(tagName, attributes.style, attributes)) {
+        element.remove();
+      }
     }
-    const style = attributes.style;
-    if (shouldStripElement(tagName, style, attributes)) {
-      $(element).remove();
-    }
-  });
 
-  return $.root().html() ?? "";
+    return serializeHtmlDocument(parsed.document);
+  } finally {
+    parsed.close();
+  }
 }

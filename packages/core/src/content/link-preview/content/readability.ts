@@ -1,3 +1,4 @@
+import { parseHtmlDocument } from "../../html-document.js";
 import { stripHiddenHtml } from "./visibility.js";
 
 export type ReadabilityResult = {
@@ -14,29 +15,21 @@ export async function extractReadabilityFromHtml(
   try {
     const cleanedHtml = stripCssFromHtml(stripHiddenHtml(html));
     const { Readability } = await import("@mozilla/readability");
-    const { JSDOM, VirtualConsole } = await import("jsdom");
-    const virtualConsole = new VirtualConsole();
-    virtualConsole.on("jsdomError", (err) => {
-      const message =
-        err && typeof err === "object" && "message" in err
-          ? String((err as { message?: unknown }).message ?? "")
-          : "";
-      if (message.includes("Could not parse CSS stylesheet")) return;
-      console.error(err);
-    });
+    const parsed = parseHtmlDocument(cleanedHtml, url);
+    try {
+      const article = new Readability(parsed.document).parse();
+      if (!article) return null;
 
-    const dom = new JSDOM(cleanedHtml, { ...(url ? { url } : undefined), virtualConsole });
-    const reader = new Readability(dom.window.document);
-    const article = reader.parse();
-    if (!article) return null;
-
-    const text = (article.textContent ?? "").replace(/\s+/g, " ").trim();
-    return {
-      text,
-      html: article.content ?? null,
-      title: article.title ?? null,
-      excerpt: article.excerpt ?? null,
-    };
+      const text = (article.textContent ?? "").replace(/\s+/g, " ").trim();
+      return {
+        text,
+        html: article.content ?? null,
+        title: article.title ?? null,
+        excerpt: article.excerpt ?? null,
+      };
+    } finally {
+      parsed.close();
+    }
   } catch {
     return null;
   }
@@ -59,6 +52,6 @@ function escapeHtml(input: string): string {
 }
 
 function stripCssFromHtml(html: string): string {
-  // Readability doesn't need CSS; jsdom's CSS parsing can be extremely slow on some pages.
+  // Readability doesn't need CSS; stylesheet parsing can be extremely slow on some pages.
   return html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "");
 }

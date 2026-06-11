@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMetricsController } from "../apps/chrome-extension/src/entrypoints/sidepanel/metrics-controller.js";

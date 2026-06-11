@@ -16,6 +16,8 @@
 
 - CLI cache: derive summary content hashes from binary attachment bytes so repeated local image summaries can hit the cache (#244, thanks @alfozan).
 - YouTube transcripts: let `--diarize auto` and matching explicit provider requests reuse the same compatible cached speaker-labelled transcript instead of re-transcribing the same video.
+- Dependencies: enforce a seven-day minimum release age and replace Cheerio/JSDOM HTML parsing with LinkeDOM, reducing the CLI production closure by 47 packages while preserving extraction behavior.
+- DNS-pinned fetches: bypass Node environment proxies so validated IP addresses cannot be replaced by proxy-side DNS resolution.
 - CLI cache: include local media `fileMtime` when writing transcript cache entries so repeated unchanged audio/video extraction can hit cache (#240, #241, thanks @alfozan).
 - CLI: pass Codex image attachments to `codex exec` so local image summaries no longer fail before starting (#242, #243, thanks @alfozan).
 - OpenAI-compatible gateways: honor `OPENAI_USE_CHAT_COMPLETIONS=false` and `openai.useChatCompletions=false` so custom base URLs can use the Responses API (#235, #236, thanks @mzbgf).

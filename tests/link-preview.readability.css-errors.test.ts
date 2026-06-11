@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { extractReadabilityFromHtml } from "../packages/core/src/content/link-preview/content/readability.js";
 
-describe("readability (jsdom css parse noise)", () => {
+describe("readability CSS parsing", () => {
   it('does not log "Could not parse CSS stylesheet"', async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 

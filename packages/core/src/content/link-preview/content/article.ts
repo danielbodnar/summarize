@@ -1,5 +1,5 @@
-import { load } from "cheerio";
 import sanitizeHtml from "sanitize-html";
+import { parseHtmlDocument } from "../../html-document.js";
 import { decodeHtmlEntities, normalizeWhitespace } from "./cleaner.js";
 import { stripHiddenHtml } from "./visibility.js";
 
@@ -100,49 +100,39 @@ export function collectSegmentsFromHtml(html: string): string[] {
     },
   });
 
-  const $ = load(sanitized);
-  const segments: string[] = [];
+  const parsed = parseHtmlDocument(sanitized);
+  try {
+    const segments: string[] = [];
 
-  $("h1,h2,h3,h4,h5,h6,li,p,blockquote,pre").each((_, element) => {
-    if (!("tagName" in element) || typeof element.tagName !== "string") {
-      return;
-    }
+    for (const element of parsed.document.querySelectorAll(
+      "h1,h2,h3,h4,h5,h6,li,p,blockquote,pre",
+    )) {
+      const tag = element.tagName.toLowerCase();
+      const text = normalizeWhitespace(element.textContent ?? "").replaceAll(/\n+/g, " ");
+      if (!text) continue;
 
-    const tag = element.tagName.toLowerCase();
-
-    const raw = $(element).text();
-    const text = normalizeWhitespace(raw).replaceAll(/\n+/g, " ");
-    if (!text || text.length === 0) {
-      return;
-    }
-
-    if (tag.startsWith("h")) {
-      if (text.length >= 10) {
-        segments.push(text);
+      if (tag.startsWith("h")) {
+        if (text.length >= 10) segments.push(text);
+        continue;
       }
-      return;
-    }
 
-    if (tag === "li") {
-      if (text.length >= 20) {
-        segments.push(`• ${text}`);
+      if (tag === "li") {
+        if (text.length >= 20) segments.push(`• ${text}`);
+        continue;
       }
-      return;
+
+      if (text.length >= MIN_SEGMENT_LENGTH) segments.push(text);
     }
 
-    if (text.length < MIN_SEGMENT_LENGTH) {
-      return;
+    if (segments.length === 0) {
+      const fallback = normalizeWhitespace(parsed.document.body?.textContent || sanitized);
+      return fallback ? [fallback] : [];
     }
 
-    segments.push(text);
-  });
-
-  if (segments.length === 0) {
-    const fallback = normalizeWhitespace($("body").text() || sanitized);
-    return fallback ? [fallback] : [];
+    return mergeConsecutiveSegments(segments);
+  } finally {
+    parsed.close();
   }
-
-  return mergeConsecutiveSegments(segments);
 }
 
 export function extractPlainText(html: string): string {
