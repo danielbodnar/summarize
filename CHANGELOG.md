@@ -1,11 +1,16 @@
 # Changelog
 
+## 0.17.2 - Unreleased
+
+### Fixes
+
+- Dependencies: replace Ora, tslog, and the FAL SDK with focused local implementations while retaining spinner, daemon logging, retry, multipart upload, and FAL transcription behavior.
+
 ## 0.17.1 - 2026-06-11
 
 ### Fixes
 
 - Pi CLI: pass summary prompts through private temporary file attachments because current Pi print mode does not read stdin.
-- Dependencies: replace Ora, tslog, and the FAL SDK with focused local implementations while retaining spinner, daemon logging, retry, multipart upload, and FAL transcription behavior.
 - Dependencies: update Markdansi to 0.3.1 and refresh the dependency lockfile.
 - Release: allow exact-version smoke tests to bypass the minimum release age for freshly published packages.
 
