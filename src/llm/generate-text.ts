@@ -22,9 +22,11 @@ import {
   normalizeAnthropicModelAccessError,
 } from "./providers/anthropic.js";
 import { completeGoogleText } from "./providers/google.js";
+import { enableMinimaxReasoningSplit } from "./providers/minimax.js";
 import {
   resolveAnthropicModel,
   resolveGoogleModel,
+  resolveMinimaxModel,
   resolveOpenAiModel,
   resolveNvidiaModel,
   resolveOllamaModel,
@@ -169,14 +171,17 @@ export async function generateTextWithModelId({
     model,
     apiKey,
     signal,
+    onPayload,
   }: {
     model: Parameters<typeof completeSimple>[0];
     apiKey: string;
     signal: AbortSignal;
+    onPayload?: (payload: unknown) => unknown;
   }): Promise<{ text: string; usage: LlmTokenUsage | null }> => {
     const result = await completeSimple(model, context, {
       ...(typeof effectiveTemperature === "number" ? { temperature: effectiveTemperature } : {}),
       ...(typeof maxOutputTokens === "number" ? { maxTokens: maxOutputTokens } : {}),
+      ...(onPayload ? { onPayload } : {}),
       apiKey,
       signal,
     });
@@ -305,6 +310,33 @@ export async function generateTextWithModelId({
           model,
           apiKey: openaiConfig.apiKey,
           signal: controller.signal,
+        });
+        return {
+          text: result.text,
+          canonicalModelId: parsed.canonical,
+          provider: parsed.provider,
+          usage: result.usage,
+        };
+      }
+
+      if (parsed.provider === "minimax") {
+        const openaiConfig = resolveOpenAiCompatibleClientConfigForProvider({
+          provider: "minimax",
+          openaiApiKey: apiKeys.openaiApiKey,
+          openrouterApiKey: apiKeys.openrouterApiKey,
+          openaiBaseUrlOverride,
+          requestOptions,
+        });
+        const model = resolveMinimaxModel({
+          modelId: parsed.model,
+          context,
+          openaiBaseUrlOverride: openaiConfig.baseURL,
+        });
+        const result = await completeSimpleText({
+          model,
+          apiKey: openaiConfig.apiKey,
+          signal: controller.signal,
+          onPayload: enableMinimaxReasoningSplit,
         });
         return {
           text: result.text,

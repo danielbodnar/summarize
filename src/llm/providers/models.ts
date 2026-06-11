@@ -1,5 +1,5 @@
 import type { Api, Context, Model } from "@earendil-works/pi-ai";
-import { DEFAULT_OLLAMA_BASE_URL } from "../provider-profile.js";
+import { DEFAULT_MINIMAX_BASE_URL, DEFAULT_OLLAMA_BASE_URL } from "../provider-profile.js";
 import {
   createSyntheticModel,
   resolveBaseUrlOverride,
@@ -81,6 +81,43 @@ export function resolveNvidiaModel({
     api,
     baseUrl,
     input: allowImages ? ["text", "image"] : ["text"],
+  };
+}
+
+export function resolveMinimaxModel({
+  modelId,
+  openaiBaseUrlOverride,
+}: {
+  modelId: string;
+  context: Context;
+  openaiBaseUrlOverride?: string | null;
+}): Model<Api> {
+  const base = tryGetModel("minimax", modelId);
+  const api = "openai-completions";
+  const baseUrl = openaiBaseUrlOverride ?? DEFAULT_MINIMAX_BASE_URL;
+  const fallback = createSyntheticModel({
+    provider: "minimax",
+    modelId,
+    api,
+    baseUrl,
+    allowImages: false,
+  });
+  return {
+    ...(base ?? fallback),
+    api,
+    baseUrl,
+    reasoning: base?.reasoning ?? true,
+    input: ["text"],
+    // The catalog entry is Anthropic-native; constrain the OpenAI transport to MiniMax-documented fields.
+    compat: {
+      supportsStore: false,
+      supportsDeveloperRole: false,
+      supportsReasoningEffort: false,
+      maxTokensField: "max_completion_tokens",
+      supportsStrictMode: false,
+      supportsLongCacheRetention: false,
+    },
+    ...(modelId.toLowerCase() === "minimax-m3" ? { contextWindow: 1_000_000 } : {}),
   };
 }
 

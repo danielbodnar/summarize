@@ -14,9 +14,11 @@ import {
   normalizeAnthropicModelAccessError,
   prepareAnthropicReasoning,
 } from "./providers/anthropic.js";
+import { enableMinimaxReasoningSplit } from "./providers/minimax.js";
 import {
   resolveAnthropicModel,
   resolveGoogleModel,
+  resolveMinimaxModel,
   resolveOpenAiModel,
   resolveXaiModel,
 } from "./providers/models.js";
@@ -240,14 +242,15 @@ export async function streamTextWithContext({
         apiKey,
         signal: controller.signal,
       });
+      const textDeltas = collectTextDeltas({
+        stream,
+        onError: (error) => {
+          lastError = error;
+        },
+      });
       return {
         textStream: createTimedTextStream({
-          textStream: collectTextDeltas({
-            stream,
-            onError: (error) => {
-              lastError = error;
-            },
-          }),
+          textStream: textDeltas,
           timeoutMs,
           controller,
           setLastError,
@@ -277,14 +280,15 @@ export async function streamTextWithContext({
         apiKey,
         signal: controller.signal,
       });
+      const textDeltas = collectTextDeltas({
+        stream,
+        onError: (error) => {
+          lastError = error;
+        },
+      });
       return {
         textStream: createTimedTextStream({
-          textStream: collectTextDeltas({
-            stream,
-            onError: (error) => {
-              lastError = error;
-            },
-          }),
+          textStream: textDeltas,
           timeoutMs,
           controller,
           setLastError,
@@ -339,6 +343,7 @@ export async function streamTextWithContext({
       parsed.provider === "openai" ||
       parsed.provider === "zai" ||
       parsed.provider === "nvidia" ||
+      parsed.provider === "minimax" ||
       parsed.provider === "github-copilot" ||
       parsed.provider === "ollama"
     ) {
@@ -418,21 +423,30 @@ export async function streamTextWithContext({
           lastError: () => lastError,
         };
       }
-      const model = resolveOpenAiModel({ modelId: parsed.model, context, openaiConfig });
+      const model =
+        parsed.provider === "minimax"
+          ? resolveMinimaxModel({
+              modelId: parsed.model,
+              context,
+              openaiBaseUrlOverride: openaiConfig.baseURL,
+            })
+          : resolveOpenAiModel({ modelId: parsed.model, context, openaiConfig });
       const stream = streamSimple(model, context, {
         ...(typeof effectiveTemperature === "number" ? { temperature: effectiveTemperature } : {}),
         ...(typeof maxOutputTokens === "number" ? { maxTokens: maxOutputTokens } : {}),
+        ...(parsed.provider === "minimax" ? { onPayload: enableMinimaxReasoningSplit } : {}),
         apiKey: openaiConfig.apiKey,
         signal: controller.signal,
       });
+      const textDeltas = collectTextDeltas({
+        stream,
+        onError: (error) => {
+          lastError = error;
+        },
+      });
       return {
         textStream: createTimedTextStream({
-          textStream: collectTextDeltas({
-            stream,
-            onError: (error) => {
-              lastError = error;
-            },
-          }),
+          textStream: textDeltas,
           timeoutMs,
           controller,
           setLastError,

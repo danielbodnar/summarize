@@ -1,6 +1,7 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { getModel } from "@earendil-works/pi-ai";
 import { isOpenRouterBaseUrl } from "@steipete/summarize-core";
+import { resolveMinimaxModel } from "../llm/providers/models.js";
 import { createSyntheticModel } from "../llm/providers/shared.js";
 import { buildAutoModelAttempts, envHasKey } from "../model-auto.js";
 import { parseCliUserModelId } from "../run/env.js";
@@ -16,12 +17,14 @@ type AgentApiKeys = {
   xaiApiKey: string | null;
   zaiApiKey: string | null;
   nvidiaApiKey: string | null;
+  minimaxApiKey: string | null;
 };
 
 const REQUIRED_ENV_BY_PROVIDER: Record<string, string> = {
   openrouter: "OPENROUTER_API_KEY",
   openai: "OPENAI_API_KEY",
   nvidia: "NVIDIA_API_KEY",
+  minimax: "MINIMAX_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
   google: "GEMINI_API_KEY",
   xai: "XAI_API_KEY",
@@ -150,6 +153,8 @@ export function resolveApiKeyForModel({
         return apiKeys.openaiApiKey;
       case "nvidia":
         return apiKeys.nvidiaApiKey;
+      case "minimax":
+        return apiKeys.minimaxApiKey;
       case "anthropic":
         return apiKeys.anthropicApiKey;
       case "google":
@@ -258,6 +263,8 @@ export async function resolveAgentModel({
     zaiBaseUrl,
     nvidiaApiKey,
     nvidiaBaseUrl,
+    minimaxApiKey,
+    minimaxBaseUrl,
     ollamaBaseUrl,
     envForAuto,
     cliAvailability,
@@ -280,6 +287,7 @@ export async function resolveAgentModel({
     xaiApiKey,
     zaiApiKey,
     nvidiaApiKey,
+    minimaxApiKey,
   };
 
   const overrides = resolveRunOverrides({});
@@ -300,11 +308,24 @@ export async function resolveAgentModel({
     xai: providerBaseUrls.xai,
     zai: zaiBaseUrl,
     nvidia: nvidiaBaseUrl,
+    minimax: minimaxBaseUrl,
     ollama: ollamaBaseUrl,
   };
 
   const applyBaseUrlOverride = (provider: string, modelId: string) => {
     const baseUrl = providerBaseUrlMap[provider] ?? null;
+    if (provider === "minimax") {
+      return {
+        provider,
+        model: resolveMinimaxModel({
+          modelId,
+          context: {
+            messages: [{ role: "user", content: pageContent, timestamp: Date.now() }],
+          },
+          openaiBaseUrlOverride: baseUrl,
+        }),
+      };
+    }
     const providerForPiAi = provider === "nvidia" || provider === "ollama" ? "openai" : provider;
     const forceOpenAiChatCompletions =
       provider === "nvidia" || provider === "ollama"
